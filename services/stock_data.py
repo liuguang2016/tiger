@@ -10,9 +10,22 @@ from typing import Optional, Dict, List
 import functools
 import hashlib
 import json
+import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 简单的内存缓存
 _cache = {}
+
+# 上次请求时间戳，用于控制请求频率
+_last_request_time = 0
+# 两次请求之间的最小间隔（秒）
+_MIN_REQUEST_INTERVAL = 1.0
+# 重试次数
+_MAX_RETRIES = 3
+# 重试间隔（秒），逐次递增
+_RETRY_DELAYS = [2, 4, 8]
 
 
 def _cache_key(stock_code: str, start_date: str, end_date: str) -> str:
@@ -34,6 +47,41 @@ def _get_market_prefix(stock_code: str) -> str:
     elif stock_code.startswith(('4', '8')):
         return 'bj'
     return 'sz'  # 默认深市
+
+
+def _throttle():
+    """控制请求频率，避免被反爬"""
+    global _last_request_time
+    now = time.time()
+    elapsed = now - _last_request_time
+    if elapsed < _MIN_REQUEST_INTERVAL:
+        time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+    _last_request_time = time.time()
+
+
+def _fetch_with_retry(stock_code: str, start_str: str, end_str: str):
+    """带重试和频率控制的 akshare 数据获取"""
+    last_error = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            _throttle()
+            logger.info(f"获取 {stock_code} K线数据 (尝试 {attempt + 1}/{_MAX_RETRIES})")
+            df = ak.stock_zh_a_hist(
+                symbol=stock_code,
+                period="daily",
+                start_date=start_str,
+                end_date=end_str,
+                adjust="qfq",
+            )
+            return df
+        except Exception as e:
+            last_error = e
+            logger.warning(f"获取 {stock_code} 失败 (尝试 {attempt + 1}): {e}")
+            if attempt < _MAX_RETRIES - 1:
+                delay = _RETRY_DELAYS[attempt] if attempt < len(_RETRY_DELAYS) else _RETRY_DELAYS[-1]
+                logger.info(f"等待 {delay} 秒后重试...")
+                time.sleep(delay)
+    raise last_error
 
 
 def fetch_kline_data(
@@ -83,14 +131,8 @@ def fetch_kline_data(
         if cache_key in _cache:
             return _cache[cache_key]
 
-        # 通过 akshare 获取日 K 线数据
-        df = ak.stock_zh_a_hist(
-            symbol=stock_code,
-            period="daily",
-            start_date=start_str,
-            end_date=end_str,
-            adjust="qfq",  # 前复权
-        )
+        # 通过 akshare 获取日 K 线数据（带重试和频率控制）
+        df = _fetch_with_retry(stock_code, start_str, end_str)
 
         if df is None or df.empty:
             return {

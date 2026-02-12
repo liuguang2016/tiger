@@ -5,10 +5,17 @@ A 股盈利交易技术分析系统 - Flask 主应用
 from flask import Flask, request, jsonify, send_from_directory
 import os
 import json
+import logging
 
 from services.parser import parse_csv
 from services.matcher import match_trades
 from services.stock_data import fetch_kline_data
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(name)s] %(levelname)s: %(message)s',
+)
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB 上传限制
