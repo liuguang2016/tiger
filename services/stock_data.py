@@ -1,17 +1,16 @@
 """
 K 线数据获取模块
-使用 akshare 获取 A 股历史 K 线数据，计算均线指标
+多数据源获取 A 股历史 K 线数据，计算均线指标
+优先使用腾讯财经API，备选东方财富(akshare)
 """
 
-import akshare as ak
 import pandas as pd
+import requests
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List
-import functools
-import hashlib
-import json
 import time
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +19,11 @@ _cache = {}
 
 # 上次请求时间戳，用于控制请求频率
 _last_request_time = 0
-# 两次请求之间的最小间隔（秒）
-_MIN_REQUEST_INTERVAL = 1.0
-# 重试次数
+_MIN_REQUEST_INTERVAL = 0.5
+
+# 重试配置
 _MAX_RETRIES = 3
-# 重试间隔（秒），逐次递增
-_RETRY_DELAYS = [2, 4, 8]
+_RETRY_DELAYS = [1, 2, 4]
 
 
 def _cache_key(stock_code: str, start_date: str, end_date: str) -> str:
@@ -34,23 +32,18 @@ def _cache_key(stock_code: str, start_date: str, end_date: str) -> str:
 
 
 def _get_market_prefix(stock_code: str) -> str:
-    """
-    根据股票代码判断市场
-    沪市：60开头
-    深市：00, 30开头
-    北交所：4, 8开头
-    """
+    """根据股票代码判断市场前缀"""
     if stock_code.startswith('6'):
         return 'sh'
     elif stock_code.startswith(('0', '3')):
         return 'sz'
     elif stock_code.startswith(('4', '8')):
         return 'bj'
-    return 'sz'  # 默认深市
+    return 'sz'
 
 
 def _throttle():
-    """控制请求频率，避免被反爬"""
+    """控制请求频率"""
     global _last_request_time
     now = time.time()
     elapsed = now - _last_request_time
@@ -59,29 +52,196 @@ def _throttle():
     _last_request_time = time.time()
 
 
-def _fetch_with_retry(stock_code: str, start_str: str, end_str: str):
-    """带重试和频率控制的 akshare 数据获取"""
+def _get_eastmoney_secid(stock_code: str) -> str:
+    """生成东方财富 secid: 1.代码(沪) 或 0.代码(深)"""
+    if stock_code.startswith('6'):
+        return f"1.{stock_code}"
+    else:
+        return f"0.{stock_code}"
+
+
+def _fetch_from_eastmoney(stock_code: str, start_str: str, end_str: str) -> Optional[pd.DataFrame]:
+    """
+    直接调用东方财富 HTTP API 获取 K 线数据
+    绕过 akshare，自行控制请求头和超时
+    """
+    secid = _get_eastmoney_secid(stock_code)
+    url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+    params = {
+        "secid": secid,
+        "fields1": "f1,f2,f3,f4,f5,f6",
+        "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+        "klt": "101",       # 日K
+        "fqt": "1",         # 前复权
+        "beg": start_str,
+        "end": end_str,
+        "ut": "7eea3edcaed734bea9004fcfb7d7c8c5",
+    }
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://quote.eastmoney.com/",
+        "Accept": "application/json, text/plain, */*",
+    }
+    resp = requests.get(url, params=params, headers=headers, timeout=15)
+    resp.raise_for_status()
+    data = resp.json()
+
+    if not data.get("data") or not data["data"].get("klines"):
+        return None
+
+    rows = []
+    for line in data["data"]["klines"]:
+        parts = line.split(",")
+        # 日期,开盘,收盘,最高,最低,成交量,成交额,振幅,涨跌幅,涨跌额,换手率
+        rows.append({
+            "date": parts[0],
+            "open": float(parts[1]),
+            "close": float(parts[2]),
+            "high": float(parts[3]),
+            "low": float(parts[4]),
+            "volume": float(parts[5]),
+        })
+
+    return pd.DataFrame(rows)
+
+
+def _fetch_from_tencent(stock_code: str, start_str: str, end_str: str) -> Optional[pd.DataFrame]:
+    """
+    调用腾讯财经 API 获取日 K 线数据（前复权）
+    腾讯接口稳定，无需特殊认证
+    start_str / end_str 格式: YYYYMMDD
+    """
+    prefix = _get_market_prefix(stock_code)
+    symbol = f"{prefix}{stock_code}"
+
+    # 计算需要多少个交易日（粗略估算：自然日 * 0.75）
+    try:
+        s_dt = datetime.strptime(start_str, "%Y%m%d")
+        e_dt = datetime.strptime(end_str, "%Y%m%d")
+        natural_days = (e_dt - s_dt).days
+        num_bars = max(int(natural_days * 0.75), 100)
+    except ValueError:
+        num_bars = 500
+
+    # 腾讯接口需要 YYYY-MM-DD 格式的日期
+    start_fmt = f"{start_str[:4]}-{start_str[4:6]}-{start_str[6:8]}"
+    end_fmt = f"{end_str[:4]}-{end_str[4:6]}-{end_str[6:8]}"
+
+    url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
+    params = {
+        "param": f"{symbol},day,{start_fmt},{end_fmt},{num_bars},qfq",
+    }
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://web.sqt.gtimg.cn/",
+    }
+
+    resp = requests.get(url, params=params, headers=headers, timeout=15)
+    resp.raise_for_status()
+
+    # 腾讯返回的可能是 JSONP 或纯 JSON
+    text = resp.text
+    json_start = text.find("{")
+    if json_start < 0:
+        return None
+    json_str = text[json_start:]
+
+    data = json.loads(json_str)
+
+    # data 可能是 dict 或 list，做安全处理
+    data_body = data.get("data", {})
+    if isinstance(data_body, list):
+        # 空列表表示无数据
+        if not data_body:
+            return None
+        # 有时腾讯返回 list 格式，取第一个元素
+        data_body = data_body[0] if isinstance(data_body[0], dict) else {}
+
+    stock_data = data_body.get(symbol, {})
+    if isinstance(stock_data, list):
+        # 再做一层安全处理
+        return None
+
+    # 优先取前复权数据 qfqday，其次 day
+    klines = stock_data.get("qfqday") or stock_data.get("day")
+    if not klines:
+        return None
+
+    rows = []
+    for k in klines:
+        # [日期, 开盘, 收盘, 最高, 最低, 成交量, ...]
+        if len(k) < 6:
+            continue
+        rows.append({
+            "date": k[0],
+            "open": float(k[1]),
+            "close": float(k[2]),
+            "high": float(k[3]),
+            "low": float(k[4]),
+            "volume": float(k[5]),
+        })
+
+    if not rows:
+        return None
+
+    df = pd.DataFrame(rows)
+    # 过滤日期范围
+    df = df[(df["date"] >= start_fmt) & (df["date"] <= end_fmt)]
+
+    return df if not df.empty else None
+
+
+def _fetch_with_fallback(stock_code: str, start_str: str, end_str: str) -> pd.DataFrame:
+    """
+    多数据源获取，带重试：
+    1. 先尝试腾讯财经 API（稳定）
+    2. 失败再尝试东方财富直连 API
+    3. 最后尝试 akshare
+    """
+    sources = [
+        ("腾讯财经", lambda: _fetch_from_tencent(stock_code, start_str, end_str)),
+        ("东方财富", lambda: _fetch_from_eastmoney(stock_code, start_str, end_str)),
+    ]
+
+    # 尝试导入 akshare 作为最后备选
+    try:
+        import akshare as ak
+        def _akshare_fetch():
+            return ak.stock_zh_a_hist(
+                symbol=stock_code, period="daily",
+                start_date=start_str, end_date=end_str, adjust="qfq",
+            ).rename(columns={
+                '日期': 'date', '开盘': 'open', '收盘': 'close',
+                '最高': 'high', '最低': 'low', '成交量': 'volume',
+            })
+        sources.append(("akshare", _akshare_fetch))
+    except ImportError:
+        pass
+
     last_error = None
-    for attempt in range(_MAX_RETRIES):
-        try:
-            _throttle()
-            logger.info(f"获取 {stock_code} K线数据 (尝试 {attempt + 1}/{_MAX_RETRIES})")
-            df = ak.stock_zh_a_hist(
-                symbol=stock_code,
-                period="daily",
-                start_date=start_str,
-                end_date=end_str,
-                adjust="qfq",
-            )
-            return df
-        except Exception as e:
-            last_error = e
-            logger.warning(f"获取 {stock_code} 失败 (尝试 {attempt + 1}): {e}")
-            if attempt < _MAX_RETRIES - 1:
-                delay = _RETRY_DELAYS[attempt] if attempt < len(_RETRY_DELAYS) else _RETRY_DELAYS[-1]
-                logger.info(f"等待 {delay} 秒后重试...")
-                time.sleep(delay)
-    raise last_error
+    for source_name, fetch_fn in sources:
+        for attempt in range(_MAX_RETRIES):
+            try:
+                _throttle()
+                logger.info(f"[{source_name}] 获取 {stock_code} K线 (尝试 {attempt + 1}/{_MAX_RETRIES})")
+                df = fetch_fn()
+                if df is not None and not df.empty:
+                    logger.info(f"[{source_name}] 获取 {stock_code} 成功, {len(df)} 条数据")
+                    return df
+                else:
+                    logger.warning(f"[{source_name}] 获取 {stock_code} 返回空数据")
+                    break  # 空数据不重试，换下一个源
+            except Exception as e:
+                last_error = e
+                logger.warning(f"[{source_name}] 获取 {stock_code} 失败 (尝试 {attempt + 1}): {e}")
+                if attempt < _MAX_RETRIES - 1:
+                    delay = _RETRY_DELAYS[attempt]
+                    logger.info(f"等待 {delay} 秒后重试...")
+                    time.sleep(delay)
+
+    if last_error:
+        raise last_error
+    raise Exception(f"所有数据源均无法获取 {stock_code} 的数据")
 
 
 def fetch_kline_data(
@@ -100,26 +260,12 @@ def fetch_kline_data(
         sell_date: 卖出日期 YYYY-MM-DD
         before_days: 买入日期前多少自然日
         after_days: 卖出日期后多少自然日
-
-    Returns:
-        {
-            'success': bool,
-            'stock_code': str,
-            'dates': list[str],
-            'ohlcv': list[list],  # [[open, close, low, high, volume], ...]
-            'ma5': list,
-            'ma10': list,
-            'ma20': list,
-            'ma60': list,
-            'message': str,
-        }
     """
     try:
-        # 计算时间范围（多取一些数据用于计算均线）
         buy_dt = datetime.strptime(buy_date, '%Y-%m-%d')
         sell_dt = datetime.strptime(sell_date, '%Y-%m-%d')
 
-        # 多取 60 天用于 MA60 计算预热
+        # 多取 90 天用于 MA60 计算预热
         start_dt = buy_dt - timedelta(days=before_days + 90)
         end_dt = sell_dt + timedelta(days=after_days)
 
@@ -131,38 +277,25 @@ def fetch_kline_data(
         if cache_key in _cache:
             return _cache[cache_key]
 
-        # 通过 akshare 获取日 K 线数据（带重试和频率控制）
-        df = _fetch_with_retry(stock_code, start_str, end_str)
+        # 多数据源获取
+        df = _fetch_with_fallback(stock_code, start_str, end_str)
 
         if df is None or df.empty:
             return {
-                'success': False,
-                'stock_code': stock_code,
-                'dates': [],
-                'ohlcv': [],
-                'ma5': [],
-                'ma10': [],
-                'ma20': [],
-                'ma60': [],
+                'success': False, 'stock_code': stock_code,
+                'dates': [], 'ohlcv': [], 'volumes': [],
+                'ma5': [], 'ma10': [], 'ma20': [], 'ma60': [],
                 'message': f'未获取到 {stock_code} 的 K 线数据',
             }
-
-        # 标准化列名（akshare 返回的列名是中文）
-        col_map = {
-            '日期': 'date',
-            '开盘': 'open',
-            '收盘': 'close',
-            '最高': 'high',
-            '最低': 'low',
-            '成交量': 'volume',
-        }
-        df = df.rename(columns=col_map)
 
         # 确保数据类型正确
         df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
         for col in ['open', 'close', 'high', 'low']:
             df[col] = df[col].astype(float)
         df['volume'] = df['volume'].astype(float)
+
+        # 按日期排序去重
+        df = df.sort_values('date').drop_duplicates(subset='date').reset_index(drop=True)
 
         # 计算均线
         df['ma5'] = df['close'].rolling(window=5).mean()
@@ -177,57 +310,37 @@ def fetch_kline_data(
 
         if df.empty:
             return {
-                'success': False,
-                'stock_code': stock_code,
-                'dates': [],
-                'ohlcv': [],
-                'ma5': [],
-                'ma10': [],
-                'ma20': [],
-                'ma60': [],
+                'success': False, 'stock_code': stock_code,
+                'dates': [], 'ohlcv': [], 'volumes': [],
+                'ma5': [], 'ma10': [], 'ma20': [], 'ma60': [],
                 'message': f'{stock_code} 在指定时间范围内无交易数据',
             }
 
         # 构造返回数据
         dates = df['date'].tolist()
-        # ECharts K 线数据格式: [open, close, low, high]
         ohlcv = df[['open', 'close', 'low', 'high']].round(2).values.tolist()
         volumes = df['volume'].tolist()
 
-        # 均线数据（None 替代 NaN）
         ma5 = [round(v, 2) if pd.notna(v) else None for v in df['ma5'].tolist()]
         ma10 = [round(v, 2) if pd.notna(v) else None for v in df['ma10'].tolist()]
         ma20 = [round(v, 2) if pd.notna(v) else None for v in df['ma20'].tolist()]
         ma60 = [round(v, 2) if pd.notna(v) else None for v in df['ma60'].tolist()]
 
         result = {
-            'success': True,
-            'stock_code': stock_code,
-            'dates': dates,
-            'ohlcv': ohlcv,
-            'volumes': volumes,
-            'ma5': ma5,
-            'ma10': ma10,
-            'ma20': ma20,
-            'ma60': ma60,
+            'success': True, 'stock_code': stock_code,
+            'dates': dates, 'ohlcv': ohlcv, 'volumes': volumes,
+            'ma5': ma5, 'ma10': ma10, 'ma20': ma20, 'ma60': ma60,
             'message': f'获取到 {len(dates)} 条 K 线数据',
         }
 
-        # 写入缓存
         _cache[cache_key] = result
         return result
 
     except Exception as e:
         return {
-            'success': False,
-            'stock_code': stock_code,
-            'dates': [],
-            'ohlcv': [],
-            'volumes': [],
-            'ma5': [],
-            'ma10': [],
-            'ma20': [],
-            'ma60': [],
+            'success': False, 'stock_code': stock_code,
+            'dates': [], 'ohlcv': [], 'volumes': [],
+            'ma5': [], 'ma10': [], 'ma20': [], 'ma60': [],
             'message': f'获取 K 线数据失败：{str(e)}',
         }
 
