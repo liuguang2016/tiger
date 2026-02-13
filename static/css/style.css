@@ -205,6 +205,175 @@ body {
 }
 
 /* ============================
+   生成报告按钮
+   ============================ */
+.report-btn-wrapper {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.generate-report-btn {
+    padding: 12px 32px;
+    background: linear-gradient(135deg, #58a6ff, #bc8cff);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    letter-spacing: 1px;
+}
+
+.generate-report-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.generate-report-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* ============================
+   交易风格分析报告
+   ============================ */
+.report-section {
+    margin-bottom: 24px;
+}
+
+.report-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.report-tag {
+    display: inline-block;
+    padding: 6px 16px;
+    background: rgba(88, 166, 255, 0.1);
+    border: 1px solid rgba(88, 166, 255, 0.3);
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-blue);
+}
+
+.report-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.report-chart-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 16px;
+}
+
+.chart-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.report-chart {
+    width: 100%;
+    height: 280px;
+}
+
+.report-summary {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 24px;
+}
+
+.summary-block {
+    margin-bottom: 20px;
+}
+
+.summary-block:last-child {
+    margin-bottom: 0;
+}
+
+.summary-block-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.summary-block-title.strengths {
+    color: var(--color-red);
+}
+
+.summary-block-title.suggestions {
+    color: var(--color-yellow);
+}
+
+.summary-list {
+    list-style: none;
+    padding: 0;
+}
+
+.summary-list li {
+    padding: 8px 0;
+    padding-left: 20px;
+    position: relative;
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.5);
+}
+
+.summary-list li:last-child {
+    border-bottom: none;
+}
+
+.summary-list li::before {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 15px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+
+.summary-block.strengths .summary-list li::before {
+    background: var(--color-red);
+}
+
+.summary-block.suggestions .summary-list li::before {
+    background: var(--color-yellow);
+}
+
+@media (max-width: 1024px) {
+    .report-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .report-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .report-chart {
+        height: 240px;
+    }
+}
+
+/* ============================
    内容区域（列表 + 图表）
    ============================ */
 .content-section {

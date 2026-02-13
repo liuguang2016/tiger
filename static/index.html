@@ -67,6 +67,44 @@
                     <span id="stat-avg-days" class="stat-value">-</span>
                 </div>
             </div>
+            <div class="report-btn-wrapper">
+                <button id="generate-report-btn" class="generate-report-btn" style="display:none;">
+                    生成交易风格分析报告
+                </button>
+            </div>
+        </section>
+
+        <!-- 交易风格分析报告 -->
+        <section id="report-section" class="report-section" style="display:none;">
+            <h2 class="section-title">交易风格分析报告</h2>
+            <div id="report-tags" class="report-tags"></div>
+            <div class="report-grid">
+                <div class="report-chart-card">
+                    <h3 class="chart-card-title">持仓天数分布</h3>
+                    <div id="chart-holding-days" class="report-chart"></div>
+                </div>
+                <div class="report-chart-card">
+                    <h3 class="chart-card-title">盈亏幅度分布</h3>
+                    <div id="chart-profit-dist" class="report-chart"></div>
+                </div>
+                <div class="report-chart-card">
+                    <h3 class="chart-card-title">月度盈亏</h3>
+                    <div id="chart-monthly-pnl" class="report-chart"></div>
+                </div>
+                <div class="report-chart-card">
+                    <h3 class="chart-card-title">单笔资金规模演变</h3>
+                    <div id="chart-amount-trend" class="report-chart"></div>
+                </div>
+                <div class="report-chart-card">
+                    <h3 class="chart-card-title">板块偏好</h3>
+                    <div id="chart-board-pref" class="report-chart"></div>
+                </div>
+                <div class="report-chart-card">
+                    <h3 class="chart-card-title">个股盈亏 TOP10</h3>
+                    <div id="chart-stock-top10" class="report-chart"></div>
+                </div>
+            </div>
+            <div id="report-summary" class="report-summary"></div>
         </section>
 
         <!-- 内容区域：左侧列表 + 右侧图表 -->

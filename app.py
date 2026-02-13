@@ -4,12 +4,13 @@ A 股盈利交易技术分析系统 - Flask 主应用
 
 from flask import Flask, request, jsonify, send_from_directory
 import os
-import json
 import logging
 
 from services.parser import parse_csv
 from services.matcher import match_trades
 from services.stock_data import fetch_kline_data
+from services.analyzer import analyze_trading_style
+from services import database as db
 
 # 配置日志
 logging.basicConfig(
@@ -20,11 +21,8 @@ logging.basicConfig(
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB 上传限制
 
-# 全局存储当前会话的交易数据（单用户简化版）
-_session_data = {
-    'records': [],       # 解析后的原始交易记录
-    'trade_result': {},  # 配对后的交易结果
-}
+# 启动时初始化数据库
+db.init_db()
 
 
 @app.route('/')
@@ -37,7 +35,7 @@ def index():
 def upload_csv():
     """
     上传交割单 CSV 文件
-    返回解析结果和盈利交易列表
+    每次上传先清空旧数据，然后解析 -> 配对 -> 存入 SQLite
     """
     if 'file' not in request.files:
         return jsonify({'success': False, 'message': '请上传 CSV 文件'}), 400
@@ -62,9 +60,11 @@ def upload_csv():
     records = parse_result['data']
     trade_result = match_trades(records)
 
-    # 存储到会话
-    _session_data['records'] = records
-    _session_data['trade_result'] = trade_result
+    # ---- 写入数据库（先清空旧数据）----
+    db.clear_all()
+    db.save_raw_records(records)
+    db.save_matched_trades(trade_result['trades'])
+    db.save_stats(trade_result['stats'])
 
     return jsonify({
         'success': True,
@@ -84,23 +84,17 @@ def get_trades():
     获取交易列表
     参数: type=profitable|losing|all (默认 profitable)
     """
-    trade_type = request.args.get('type', 'profitable')
-    trade_result = _session_data.get('trade_result', {})
-
-    if not trade_result:
+    if not db.has_data():
         return jsonify({'success': False, 'message': '请先上传交割单'}), 400
 
-    if trade_type == 'profitable':
-        trades = trade_result.get('profitable', [])
-    elif trade_type == 'losing':
-        trades = trade_result.get('losing', [])
-    else:
-        trades = trade_result.get('trades', [])
+    trade_type = request.args.get('type', 'profitable')
+    trades = db.get_trades(trade_type)
+    stats = db.get_stats() or {}
 
     return jsonify({
         'success': True,
         'trades': trades,
-        'stats': trade_result.get('stats', {}),
+        'stats': stats,
     })
 
 
@@ -134,6 +128,20 @@ def get_kline():
     kline_data['sell_date'] = sell_date
 
     return jsonify(kline_data)
+
+
+@app.route('/api/report')
+def get_report():
+    """
+    生成交易风格分析报告
+    从数据库读取交易数据，调用 analyzer 分析
+    """
+    if not db.has_data():
+        return jsonify({'success': False, 'message': '请先上传交割单'}), 400
+
+    trade_result = db.get_trade_result_for_report()
+    report = analyze_trading_style(trade_result)
+    return jsonify({'success': True, 'report': report})
 
 
 if __name__ == '__main__':

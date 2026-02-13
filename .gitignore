@@ -20,3 +20,6 @@ Thumbs.db
 
 # Python 安装包
 python-installer.exe
+
+# 数据库
+data/

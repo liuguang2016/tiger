@@ -11,13 +11,62 @@ const AppState = {
     sortBy: 'sell_date_desc',
 };
 
+// 报告图表实例（用于 resize 和 dispose）
+let reportChartInstances = [];
+
 // ============================
 // 初始化
 // ============================
 document.addEventListener('DOMContentLoaded', () => {
     initUpload();
     initSort();
+    initReportBtn();
+    // 页面加载时检查数据库中是否已有数据，有则自动恢复
+    restoreFromDB();
 });
+
+/**
+ * 页面刷新后自动从服务端数据库恢复数据
+ * 如果数据库有交易数据，直接展示统计面板和交易列表
+ */
+async function restoreFromDB() {
+    try {
+        const resp = await fetch('/api/trades?type=profitable');
+        const data = await resp.json();
+
+        if (!data.success || !data.trades || data.trades.length === 0) {
+            return; // 数据库无数据，保持初始上传页面
+        }
+
+        // 恢复前端状态
+        AppState.trades = data.trades;
+        AppState.stats = data.stats;
+
+        // 渲染统计面板和交易列表
+        updateStats(AppState.stats);
+        renderTradeList(AppState.trades);
+
+        // 显示各区域
+        document.getElementById('stats-section').style.display = 'block';
+        document.getElementById('content-section').style.display = 'block';
+
+        // 显示报告按钮
+        const reportBtn = document.getElementById('generate-report-btn');
+        reportBtn.style.display = 'inline-block';
+        reportBtn.textContent = '生成交易风格分析报告';
+        reportBtn.disabled = false;
+
+        // 更新上传区域提示
+        showUploadStatus(
+            `已加载数据库中的交易记录：${AppState.stats.total_trades} 笔交易，` +
+            `其中盈利 ${AppState.stats.profitable_count} 笔（重新上传将覆盖旧数据）`,
+            'success'
+        );
+    } catch (err) {
+        // 静默失败，不影响正常使用
+        console.log('恢复数据库数据失败:', err.message);
+    }
+}
 
 // ============================
 // 文件上传
@@ -88,6 +137,13 @@ async function uploadFile(file) {
 
             document.getElementById('stats-section').style.display = 'block';
             document.getElementById('content-section').style.display = 'block';
+
+            // 显示报告按钮，隐藏旧报告
+            const reportBtn = document.getElementById('generate-report-btn');
+            reportBtn.style.display = 'inline-block';
+            reportBtn.textContent = '生成交易风格分析报告';
+            reportBtn.disabled = false;
+            document.getElementById('report-section').style.display = 'none';
         } else {
             showUploadStatus(data.message || '解析失败', 'error');
         }
@@ -311,4 +367,311 @@ function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+// ============================
+// 交易风格分析报告
+// ============================
+function initReportBtn() {
+    const btn = document.getElementById('generate-report-btn');
+    btn.addEventListener('click', generateReport);
+}
+
+async function generateReport() {
+    const btn = document.getElementById('generate-report-btn');
+    btn.disabled = true;
+    btn.textContent = '正在生成报告...';
+
+    try {
+        const resp = await fetch('/api/report');
+        const data = await resp.json();
+
+        if (data.success && data.report && !data.report.empty) {
+            renderReport(data.report);
+            document.getElementById('report-section').style.display = 'block';
+            document.getElementById('report-section').scrollIntoView({ behavior: 'smooth' });
+            btn.textContent = '重新生成报告';
+        } else {
+            alert(data.report?.message || data.message || '生成报告失败');
+            btn.textContent = '生成交易风格分析报告';
+        }
+    } catch (err) {
+        alert('请求失败：' + err.message);
+        btn.textContent = '生成交易风格分析报告';
+    }
+
+    btn.disabled = false;
+}
+
+function renderReport(report) {
+    // 销毁旧图表
+    reportChartInstances.forEach(c => c.dispose());
+    reportChartInstances = [];
+
+    // 风格标签
+    renderTags(report.tags || []);
+
+    // 6 个图表
+    renderHoldingDaysChart(report.holding_days_dist || []);
+    renderProfitDistChart(report.profit_pct_dist || []);
+    renderMonthlyPnlChart(report.monthly_pnl || []);
+    renderAmountTrendChart(report.amount_trend || []);
+    renderBoardPrefChart(report.board_pref || []);
+    renderStockTop10Chart(report.stock_top10 || []);
+
+    // 文字总结
+    renderSummary(report.summary || {});
+
+    // resize 处理
+    window.addEventListener('resize', () => {
+        reportChartInstances.forEach(c => c.resize());
+    });
+}
+
+function _initChart(domId) {
+    const el = document.getElementById(domId);
+    if (!el) return null;
+    const chart = echarts.init(el, 'dark');
+    reportChartInstances.push(chart);
+    return chart;
+}
+
+// --- 风格标签 ---
+function renderTags(tags) {
+    const container = document.getElementById('report-tags');
+    container.innerHTML = tags.map(t =>
+        `<span class="report-tag">${escapeHtml(t)}</span>`
+    ).join('');
+}
+
+// --- 持仓天数分布（饼图）---
+function renderHoldingDaysChart(data) {
+    const chart = _initChart('chart-holding-days');
+    if (!chart) return;
+    chart.setOption({
+        backgroundColor: 'transparent',
+        tooltip: { trigger: 'item', formatter: '{b}: {c}笔 ({d}%)' },
+        legend: { bottom: 0, textStyle: { color: '#8b949e', fontSize: 11 } },
+        series: [{
+            type: 'pie',
+            radius: ['35%', '65%'],
+            center: ['50%', '45%'],
+            avoidLabelOverlap: true,
+            itemStyle: { borderRadius: 4, borderColor: '#161b22', borderWidth: 2 },
+            label: { show: true, color: '#e6edf3', fontSize: 12, formatter: '{b}\n{d}%' },
+            data: data.map((d, i) => ({
+                name: d.label,
+                value: d.count,
+                itemStyle: { color: ['#58a6ff', '#bc8cff', '#d29922', '#3fb950'][i] },
+            })),
+        }],
+    });
+}
+
+// --- 盈亏幅度分布（柱状图）---
+function renderProfitDistChart(data) {
+    const chart = _initChart('chart-profit-dist');
+    if (!chart) return;
+    chart.setOption({
+        backgroundColor: 'transparent',
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        grid: { left: '8%', right: '5%', top: '8%', bottom: '15%' },
+        xAxis: {
+            type: 'category',
+            data: data.map(d => d.label),
+            axisLabel: { color: '#8b949e', fontSize: 10, rotate: 25 },
+            axisLine: { lineStyle: { color: '#30363d' } },
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: { color: '#8b949e', fontSize: 10 },
+            splitLine: { lineStyle: { color: '#21262d' } },
+        },
+        series: [{
+            type: 'bar',
+            barWidth: '50%',
+            data: data.map(d => ({
+                value: d.count,
+                itemStyle: {
+                    color: d.label.startsWith('亏')
+                        ? '#3fb950'
+                        : '#f85149',
+                },
+            })),
+        }],
+    });
+}
+
+// --- 月度盈亏（正负柱状图）---
+function renderMonthlyPnlChart(data) {
+    const chart = _initChart('chart-monthly-pnl');
+    if (!chart) return;
+    chart.setOption({
+        backgroundColor: 'transparent',
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' },
+            formatter: function (params) {
+                let html = `<div style="font-weight:600">${params[0].axisValue}</div>`;
+                params.forEach(p => {
+                    html += `<div style="color:${p.color}">${p.seriesName}: ${p.value.toLocaleString()}</div>`;
+                });
+                return html;
+            },
+        },
+        legend: { bottom: 0, textStyle: { color: '#8b949e', fontSize: 11 } },
+        grid: { left: '10%', right: '5%', top: '8%', bottom: '18%' },
+        xAxis: {
+            type: 'category',
+            data: data.map(d => d.month),
+            axisLabel: { color: '#8b949e', fontSize: 10 },
+            axisLine: { lineStyle: { color: '#30363d' } },
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: { color: '#8b949e', fontSize: 10, formatter: v => (v / 10000).toFixed(1) + '万' },
+            splitLine: { lineStyle: { color: '#21262d' } },
+        },
+        series: [
+            {
+                name: '盈利',
+                type: 'bar',
+                stack: 'pnl',
+                data: data.map(d => d.profit),
+                itemStyle: { color: '#f85149' },
+            },
+            {
+                name: '亏损',
+                type: 'bar',
+                stack: 'pnl',
+                data: data.map(d => d.loss),
+                itemStyle: { color: '#3fb950' },
+            },
+        ],
+    });
+}
+
+// --- 单笔资金规模演变（折线图）---
+function renderAmountTrendChart(data) {
+    const chart = _initChart('chart-amount-trend');
+    if (!chart) return;
+    chart.setOption({
+        backgroundColor: 'transparent',
+        tooltip: {
+            trigger: 'axis',
+            formatter: p => `${p[0].axisValue}<br/>平均单笔: ${Number(p[0].value).toLocaleString()} 元`,
+        },
+        grid: { left: '12%', right: '5%', top: '8%', bottom: '12%' },
+        xAxis: {
+            type: 'category',
+            data: data.map(d => d.month),
+            axisLabel: { color: '#8b949e', fontSize: 10 },
+            axisLine: { lineStyle: { color: '#30363d' } },
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: { color: '#8b949e', fontSize: 10, formatter: v => (v / 10000).toFixed(1) + '万' },
+            splitLine: { lineStyle: { color: '#21262d' } },
+        },
+        series: [{
+            type: 'line',
+            data: data.map(d => d.avg_amount),
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: 8,
+            lineStyle: { color: '#58a6ff', width: 2 },
+            itemStyle: { color: '#58a6ff' },
+            areaStyle: { color: 'rgba(88,166,255,0.1)' },
+        }],
+    });
+}
+
+// --- 板块偏好（环形图）---
+function renderBoardPrefChart(data) {
+    const chart = _initChart('chart-board-pref');
+    if (!chart) return;
+    const colors = ['#f85149', '#58a6ff', '#bc8cff', '#d29922', '#3fb950'];
+    chart.setOption({
+        backgroundColor: 'transparent',
+        tooltip: { trigger: 'item', formatter: '{b}: {c}笔 ({d}%)' },
+        legend: { bottom: 0, textStyle: { color: '#8b949e', fontSize: 11 } },
+        series: [{
+            type: 'pie',
+            radius: ['40%', '65%'],
+            center: ['50%', '45%'],
+            itemStyle: { borderRadius: 4, borderColor: '#161b22', borderWidth: 2 },
+            label: { show: true, color: '#e6edf3', fontSize: 12, formatter: '{b}\n{d}%' },
+            data: data.map((d, i) => ({
+                name: d.label,
+                value: d.count,
+                itemStyle: { color: colors[i % colors.length] },
+            })),
+        }],
+    });
+}
+
+// --- 个股盈亏 TOP10（横向柱状图）---
+function renderStockTop10Chart(data) {
+    const chart = _initChart('chart-stock-top10');
+    if (!chart) return;
+    // 从下到上，让最大的在上面
+    const reversed = [...data].reverse();
+    chart.setOption({
+        backgroundColor: 'transparent',
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' },
+            formatter: p => `${p[0].name}<br/>盈亏: ${Number(p[0].value).toLocaleString()} 元`,
+        },
+        grid: { left: '25%', right: '8%', top: '5%', bottom: '5%' },
+        xAxis: {
+            type: 'value',
+            axisLabel: { color: '#8b949e', fontSize: 10 },
+            splitLine: { lineStyle: { color: '#21262d' } },
+        },
+        yAxis: {
+            type: 'category',
+            data: reversed.map(d => d.name || d.code),
+            axisLabel: { color: '#e6edf3', fontSize: 11 },
+            axisLine: { lineStyle: { color: '#30363d' } },
+        },
+        series: [{
+            type: 'bar',
+            data: reversed.map(d => ({
+                value: d.profit,
+                itemStyle: { color: d.profit >= 0 ? '#f85149' : '#3fb950' },
+            })),
+            barWidth: '55%',
+        }],
+    });
+}
+
+// --- 文字总结 ---
+function renderSummary(summary) {
+    const container = document.getElementById('report-summary');
+    let html = '';
+
+    if (summary.strengths && summary.strengths.length > 0) {
+        html += `
+            <div class="summary-block strengths">
+                <div class="summary-block-title strengths">&#9650; 交易优势</div>
+                <ul class="summary-list">
+                    ${summary.strengths.map(s => `<li>${escapeHtml(s)}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    if (summary.suggestions && summary.suggestions.length > 0) {
+        html += `
+            <div class="summary-block suggestions">
+                <div class="summary-block-title suggestions">&#9654; 改进建议</div>
+                <ul class="summary-list">
+                    ${summary.suggestions.map(s => `<li>${escapeHtml(s)}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    container.innerHTML = html;
 }
