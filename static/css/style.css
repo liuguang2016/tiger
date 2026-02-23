@@ -383,7 +383,7 @@ body {
 .content-layout {
     display: flex;
     gap: 20px;
-    min-height: 600px;
+    height: 680px;
 }
 
 /* 左侧交易列表 */
@@ -392,6 +392,7 @@ body {
     min-width: 380px;
     display: flex;
     flex-direction: column;
+    height: 100%;
 }
 
 .panel-header {
@@ -418,7 +419,6 @@ body {
 .trade-list {
     flex: 1;
     overflow-y: auto;
-    max-height: 700px;
     padding-right: 4px;
 }
 
@@ -523,6 +523,7 @@ body {
     min-width: 0;
     display: flex;
     flex-direction: column;
+    height: 100%;
 }
 
 .chart-placeholder {
@@ -537,7 +538,6 @@ body {
     font-size: 16px;
     text-align: center;
     line-height: 2;
-    min-height: 500px;
 }
 
 .chart-loading {
@@ -549,7 +549,6 @@ body {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
-    min-height: 500px;
     color: var(--text-secondary);
 }
 
@@ -593,7 +592,8 @@ body {
 
 .kline-chart {
     width: 100%;
-    height: 600px;
+    flex: 1;
+    min-height: 0;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
@@ -617,19 +617,21 @@ body {
 @media (max-width: 1024px) {
     .content-layout {
         flex-direction: column;
+        height: auto;
     }
 
     .trade-list-panel {
         width: 100%;
         min-width: unset;
+        height: auto;
     }
 
     .trade-list {
         max-height: 300px;
     }
 
-    .kline-chart {
-        height: 450px;
+    .chart-panel {
+        height: 500px;
     }
 }
 

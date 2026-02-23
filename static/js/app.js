@@ -56,12 +56,19 @@ async function restoreFromDB() {
         reportBtn.textContent = '生成交易风格分析报告';
         reportBtn.disabled = false;
 
-        // 更新上传区域提示
-        showUploadStatus(
-            `已加载数据库中的交易记录：${AppState.stats.total_trades} 笔交易，` +
-            `其中盈利 ${AppState.stats.profitable_count} 笔（重新上传将覆盖旧数据）`,
-            'success'
-        );
+        // 数据已恢复，折叠上传区域，只保留紧凑提示
+        document.getElementById('drop-zone').style.display = 'none';
+        const statusEl = document.getElementById('upload-status');
+        statusEl.style.display = 'block';
+        statusEl.className = 'upload-status success';
+        statusEl.innerHTML =
+            `已加载历史交易记录：${AppState.stats.total_trades} 笔交易，` +
+            `其中盈利 ${AppState.stats.profitable_count} 笔 ` +
+            `<a href="javascript:void(0)" id="reupload-link" style="color:inherit;text-decoration:underline;margin-left:12px;">重新上传交割单</a>`;
+        document.getElementById('reupload-link').addEventListener('click', () => {
+            document.getElementById('drop-zone').style.display = '';
+            statusEl.style.display = 'none';
+        });
     } catch (err) {
         // 静默失败，不影响正常使用
         console.log('恢复数据库数据失败:', err.message);
