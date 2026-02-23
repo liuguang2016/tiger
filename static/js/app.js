@@ -5,9 +5,12 @@
 
 // 全局状态
 const AppState = {
-    trades: [],          // 盈利交易列表
+    trades: [],          // 当前 Tab 显示的交易列表
+    losingTrades: null,  // 亏损交易缓存（懒加载）
+    profitableTrades: null, // 盈利交易缓存
     stats: null,         // 统计信息
     activeTrade: null,   // 当前选中的交易
+    activeTab: 'profitable', // 当前 Tab
     sortBy: 'sell_date_desc',
 };
 
@@ -18,12 +21,39 @@ let reportChartInstances = [];
 // 初始化
 // ============================
 document.addEventListener('DOMContentLoaded', () => {
+    initNav();
     initUpload();
     initSort();
+    initTabs();
     initReportBtn();
-    // 页面加载时检查数据库中是否已有数据，有则自动恢复
     restoreFromDB();
 });
+
+// ============================
+// 导航菜单切换
+// ============================
+function initNav() {
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetPage = item.dataset.page;
+
+            // 更新导航高亮
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            item.classList.add('active');
+
+            // 切换页面
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            const pageEl = document.getElementById('page-' + targetPage);
+            if (pageEl) pageEl.classList.add('active');
+
+            // 切换到图表页面时触发 resize，防止 ECharts 尺寸异常
+            setTimeout(() => {
+                window.dispatchEvent(new Event('resize'));
+            }, 50);
+        });
+    });
+}
 
 /**
  * 页面刷新后自动从服务端数据库恢复数据
@@ -40,35 +70,41 @@ async function restoreFromDB() {
 
         // 恢复前端状态
         AppState.trades = data.trades;
+        AppState.profitableTrades = data.trades;
+        AppState.losingTrades = null;
+        AppState.activeTab = 'profitable';
         AppState.stats = data.stats;
 
         // 渲染统计面板和交易列表
         updateStats(AppState.stats);
+        updateTabCounts();
+        resetTabHighlight();
         renderTradeList(AppState.trades);
 
         // 显示各区域
         document.getElementById('stats-section').style.display = 'block';
         document.getElementById('content-section').style.display = 'block';
 
-        // 显示报告按钮
-        const reportBtn = document.getElementById('generate-report-btn');
-        reportBtn.style.display = 'inline-block';
-        reportBtn.textContent = '生成交易风格分析报告';
-        reportBtn.disabled = false;
-
-        // 数据已恢复，折叠上传区域，只保留紧凑提示
+        // 数据已恢复，折叠上传区域，只保留紧凑状态栏
         document.getElementById('drop-zone').style.display = 'none';
+        const bar = document.getElementById('status-bar');
+        bar.style.display = 'flex';
+        bar.className = 'status-bar';
         const statusEl = document.getElementById('upload-status');
-        statusEl.style.display = 'block';
-        statusEl.className = 'upload-status success';
         statusEl.innerHTML =
             `已加载历史交易记录：${AppState.stats.total_trades} 笔交易，` +
             `其中盈利 ${AppState.stats.profitable_count} 笔 ` +
             `<a href="javascript:void(0)" id="reupload-link" style="color:inherit;text-decoration:underline;margin-left:12px;">重新上传交割单</a>`;
         document.getElementById('reupload-link').addEventListener('click', () => {
             document.getElementById('drop-zone').style.display = '';
-            statusEl.style.display = 'none';
+            bar.style.display = 'none';
         });
+
+        // 显示报告按钮（在状态栏右侧）
+        const reportBtn = document.getElementById('generate-report-btn');
+        reportBtn.style.display = 'inline-block';
+        reportBtn.textContent = '生成交易风格分析报告';
+        reportBtn.disabled = false;
     } catch (err) {
         // 静默失败，不影响正常使用
         console.log('恢复数据库数据失败:', err.message);
@@ -136,10 +172,15 @@ async function uploadFile(file) {
             );
 
             AppState.trades = data.trades || [];
+            AppState.profitableTrades = data.trades || [];
+            AppState.losingTrades = null; // 清除亏损缓存，下次切换时重新加载
+            AppState.activeTab = 'profitable';
             AppState.stats = data.stats || {};
 
             // 显示统计和内容区域
             updateStats(AppState.stats);
+            updateTabCounts();
+            resetTabHighlight();
             renderTradeList(AppState.trades);
 
             document.getElementById('stats-section').style.display = 'block';
@@ -153,16 +194,19 @@ async function uploadFile(file) {
             document.getElementById('report-section').style.display = 'none';
         } else {
             showUploadStatus(data.message || '解析失败', 'error');
+            document.getElementById('generate-report-btn').style.display = 'none';
         }
     } catch (err) {
         showUploadStatus('上传失败：' + err.message, 'error');
+        document.getElementById('generate-report-btn').style.display = 'none';
     }
 }
 
 function showUploadStatus(message, type) {
+    const bar = document.getElementById('status-bar');
     const el = document.getElementById('upload-status');
-    el.style.display = 'block';
-    el.className = 'upload-status ' + type;
+    bar.style.display = 'flex';
+    bar.className = 'status-bar' + (type === 'error' ? ' error' : '');
     el.textContent = message;
 }
 
@@ -192,6 +236,80 @@ function initSort() {
     sortSelect.addEventListener('change', (e) => {
         AppState.sortBy = e.target.value;
         sortAndRenderTrades();
+    });
+}
+
+function initTabs() {
+    document.querySelectorAll('.trade-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const type = tab.dataset.type;
+            if (type === AppState.activeTab) return;
+            switchTab(type);
+        });
+    });
+}
+
+async function switchTab(type) {
+    AppState.activeTab = type;
+
+    // 更新 Tab 高亮
+    document.querySelectorAll('.trade-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.type === type);
+    });
+
+    // 检查缓存，没有则从 API 加载
+    if (type === 'profitable') {
+        if (AppState.profitableTrades) {
+            AppState.trades = AppState.profitableTrades;
+            sortAndRenderTrades();
+        } else {
+            await loadTrades('profitable');
+        }
+    } else {
+        if (AppState.losingTrades) {
+            AppState.trades = AppState.losingTrades;
+            sortAndRenderTrades();
+        } else {
+            await loadTrades('losing');
+        }
+    }
+
+    // 清除 K 线选中状态
+    AppState.activeTrade = null;
+}
+
+async function loadTrades(type) {
+    const container = document.getElementById('trade-list');
+    container.innerHTML = '<div style="text-align:center;color:#6e7681;padding:32px;">加载中...</div>';
+
+    try {
+        const resp = await fetch(`/api/trades?type=${type}`);
+        const data = await resp.json();
+        if (data.success) {
+            const trades = data.trades || [];
+            if (type === 'profitable') {
+                AppState.profitableTrades = trades;
+            } else {
+                AppState.losingTrades = trades;
+            }
+            AppState.trades = trades;
+            sortAndRenderTrades();
+        }
+    } catch (err) {
+        container.innerHTML = `<div style="text-align:center;color:#f85149;padding:32px;">加载失败: ${err.message}</div>`;
+    }
+}
+
+function updateTabCounts() {
+    const profCount = AppState.stats?.profitable_count ?? 0;
+    const loseCount = AppState.stats?.losing_count ?? 0;
+    setText('tab-count-profitable', profCount);
+    setText('tab-count-losing', loseCount);
+}
+
+function resetTabHighlight() {
+    document.querySelectorAll('.trade-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.type === 'profitable');
     });
 }
 
@@ -229,7 +347,8 @@ function renderTradeList(trades) {
     container.innerHTML = '';
 
     if (trades.length === 0) {
-        container.innerHTML = '<div style="text-align:center;color:#6e7681;padding:32px;">没有盈利交易记录</div>';
+        const label = AppState.activeTab === 'profitable' ? '盈利' : '亏损';
+        container.innerHTML = `<div style="text-align:center;color:#6e7681;padding:32px;">没有${label}交易记录</div>`;
         return;
     }
 
@@ -264,7 +383,7 @@ function renderTradeList(trades) {
                     <span>${trade.sell_date}</span>
                 </div>
                 <div class="trade-meta">
-                    <span class="trade-pct">+${trade.profit_pct}%</span>
+                    <span class="trade-pct ${trade.profit_pct >= 0 ? '' : 'loss'}">${trade.profit_pct >= 0 ? '+' : ''}${trade.profit_pct}%</span>
                     <span class="trade-days">${trade.holding_days}天</span>
                 </div>
             </div>

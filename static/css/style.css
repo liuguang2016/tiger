@@ -45,21 +45,100 @@ body {
 .header {
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-color);
-    padding: 20px 32px;
-    text-align: center;
+    padding: 0 32px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.header-inner {
+    max-width: 1440px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    height: 56px;
+    gap: 32px;
 }
 
 .header-title {
-    font-size: 24px;
-    font-weight: 600;
-    color: var(--text-primary);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--color-blue);
     letter-spacing: 1px;
+    flex-shrink: 0;
 }
 
-.header-subtitle {
+.main-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 100%;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 16px;
+    height: 100%;
     font-size: 14px;
+    font-weight: 500;
     color: var(--text-secondary);
-    margin-top: 4px;
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s ease;
+}
+
+.nav-item:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.nav-item.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--color-blue);
+}
+
+.nav-icon {
+    font-size: 16px;
+}
+
+/* ============================
+   页面切换
+   ============================ */
+.page {
+    display: none;
+}
+
+.page.active {
+    display: block;
+}
+
+/* 空白页占位 */
+.empty-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 480px;
+    color: var(--text-muted);
+}
+
+.empty-page-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+}
+
+.empty-page-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.empty-page-desc {
+    font-size: 15px;
+    color: var(--text-muted);
 }
 
 /* ============================
@@ -134,23 +213,32 @@ body {
     margin-top: 12px;
 }
 
-.upload-status {
+.status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
     margin-top: 12px;
-    padding: 12px 16px;
+    padding: 10px 16px;
     border-radius: var(--radius);
-    font-size: 14px;
-}
-
-.upload-status.success {
     background: var(--color-green-bg);
-    color: var(--color-green);
     border: 1px solid rgba(63, 185, 80, 0.3);
 }
 
-.upload-status.error {
+.status-bar.error {
     background: var(--color-red-bg);
+    border-color: rgba(248, 81, 73, 0.3);
+}
+
+.status-bar.error .upload-status {
     color: var(--color-red);
-    border: 1px solid rgba(248, 81, 73, 0.3);
+}
+
+.upload-status {
+    font-size: 14px;
+    color: var(--color-green);
+    flex: 1;
+    min-width: 0;
 }
 
 /* ============================
@@ -207,22 +295,18 @@ body {
 /* ============================
    生成报告按钮
    ============================ */
-.report-btn-wrapper {
-    text-align: center;
-    margin-top: 20px;
-}
-
 .generate-report-btn {
-    padding: 12px 32px;
+    padding: 8px 20px;
     background: linear-gradient(135deg, #58a6ff, #bc8cff);
     color: #fff;
     border: none;
     border-radius: var(--radius);
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    letter-spacing: 1px;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .generate-report-btn:hover {
@@ -406,6 +490,53 @@ body {
     margin-bottom: 0;
 }
 
+/* Tab 切换 */
+.trade-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 3px;
+}
+
+.trade-tab {
+    padding: 6px 16px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.trade-tab:hover {
+    color: var(--text-primary);
+}
+
+.trade-tab.active[data-type="profitable"] {
+    background: rgba(248, 81, 73, 0.15);
+    color: var(--color-red);
+}
+
+.trade-tab.active[data-type="losing"] {
+    background: rgba(63, 185, 80, 0.15);
+    color: var(--color-green);
+}
+
+.tab-count {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
 .sort-controls select {
     background: var(--bg-secondary);
     color: var(--text-primary);
@@ -511,6 +642,10 @@ body {
 .trade-pct {
     color: var(--color-red);
     font-weight: 600;
+}
+
+.trade-pct.loss {
+    color: var(--color-green);
 }
 
 .trade-days {

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>A 股盈利交易技术分析</title>
+    <title>A 股交易分析系统</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <!-- ECharts CDN -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
@@ -11,149 +11,177 @@
 <body>
     <!-- 顶部导航栏 -->
     <header class="header">
-        <h1 class="header-title">A 股盈利交易技术分析</h1>
-        <p class="header-subtitle">上传交割单 · 筛选盈利交易 · 发现交易模式</p>
+        <div class="header-inner">
+            <h1 class="header-title">Tigger</h1>
+            <nav class="main-nav">
+                <a href="#" class="nav-item active" data-page="analysis">
+                    <span class="nav-icon">📊</span>交割单分析
+                </a>
+                <a href="#" class="nav-item" data-page="stock-pick">
+                    <span class="nav-icon">🎯</span>个人选股
+                </a>
+            </nav>
+        </div>
     </header>
 
     <main class="main-container">
-        <!-- 上传区域 -->
-        <section id="upload-section" class="upload-section">
-            <div id="drop-zone" class="drop-zone">
-                <div class="drop-zone-icon">📂</div>
-                <p class="drop-zone-text">拖拽 CSV 交割单到此处，或</p>
-                <label class="upload-btn">
-                    选择文件
-                    <input type="file" id="file-input" accept=".csv" hidden>
-                </label>
-                <p class="drop-zone-hint">支持常见券商导出的 CSV 格式交割单</p>
-            </div>
-            <div id="upload-status" class="upload-status" style="display:none;"></div>
-        </section>
 
-        <!-- 统计面板 -->
-        <section id="stats-section" class="stats-section" style="display:none;">
-            <h2 class="section-title">交易统计概览</h2>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <span class="stat-label">总交易笔数</span>
-                    <span id="stat-total" class="stat-value">-</span>
+        <!-- ====== 页面1：交割单分析 ====== -->
+        <div id="page-analysis" class="page active">
+            <!-- 上传区域 -->
+            <section id="upload-section" class="upload-section">
+                <div id="drop-zone" class="drop-zone">
+                    <div class="drop-zone-icon">📂</div>
+                    <p class="drop-zone-text">拖拽 CSV 交割单到此处，或</p>
+                    <label class="upload-btn">
+                        选择文件
+                        <input type="file" id="file-input" accept=".csv" hidden>
+                    </label>
+                    <p class="drop-zone-hint">支持常见券商导出的 CSV 格式交割单</p>
                 </div>
-                <div class="stat-card profit">
-                    <span class="stat-label">盈利笔数</span>
-                    <span id="stat-profitable" class="stat-value">-</span>
+                <div id="status-bar" class="status-bar" style="display:none;">
+                    <div id="upload-status" class="upload-status"></div>
+                    <button id="generate-report-btn" class="generate-report-btn" style="display:none;">
+                        生成交易风格分析报告
+                    </button>
                 </div>
-                <div class="stat-card">
-                    <span class="stat-label">胜率</span>
-                    <span id="stat-winrate" class="stat-value">-</span>
-                </div>
-                <div class="stat-card profit">
-                    <span class="stat-label">总盈利</span>
-                    <span id="stat-total-profit" class="stat-value">-</span>
-                </div>
-                <div class="stat-card loss">
-                    <span class="stat-label">总亏损</span>
-                    <span id="stat-total-loss" class="stat-value">-</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">净盈利</span>
-                    <span id="stat-net-profit" class="stat-value">-</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">平均盈利比例</span>
-                    <span id="stat-avg-pct" class="stat-value">-</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">平均持仓天数</span>
-                    <span id="stat-avg-days" class="stat-value">-</span>
-                </div>
-            </div>
-            <div class="report-btn-wrapper">
-                <button id="generate-report-btn" class="generate-report-btn" style="display:none;">
-                    生成交易风格分析报告
-                </button>
-            </div>
-        </section>
+            </section>
 
-        <!-- 交易风格分析报告 -->
-        <section id="report-section" class="report-section" style="display:none;">
-            <h2 class="section-title">交易风格分析报告</h2>
-            <div id="report-tags" class="report-tags"></div>
-            <div class="report-grid">
-                <div class="report-chart-card">
-                    <h3 class="chart-card-title">持仓天数分布</h3>
-                    <div id="chart-holding-days" class="report-chart"></div>
+            <!-- 统计面板 -->
+            <section id="stats-section" class="stats-section" style="display:none;">
+                <h2 class="section-title">交易统计概览</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-label">总交易笔数</span>
+                        <span id="stat-total" class="stat-value">-</span>
+                    </div>
+                    <div class="stat-card profit">
+                        <span class="stat-label">盈利笔数</span>
+                        <span id="stat-profitable" class="stat-value">-</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">胜率</span>
+                        <span id="stat-winrate" class="stat-value">-</span>
+                    </div>
+                    <div class="stat-card profit">
+                        <span class="stat-label">总盈利</span>
+                        <span id="stat-total-profit" class="stat-value">-</span>
+                    </div>
+                    <div class="stat-card loss">
+                        <span class="stat-label">总亏损</span>
+                        <span id="stat-total-loss" class="stat-value">-</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">净盈利</span>
+                        <span id="stat-net-profit" class="stat-value">-</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">平均盈利比例</span>
+                        <span id="stat-avg-pct" class="stat-value">-</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">平均持仓天数</span>
+                        <span id="stat-avg-days" class="stat-value">-</span>
+                    </div>
                 </div>
-                <div class="report-chart-card">
-                    <h3 class="chart-card-title">盈亏幅度分布</h3>
-                    <div id="chart-profit-dist" class="report-chart"></div>
-                </div>
-                <div class="report-chart-card">
-                    <h3 class="chart-card-title">月度盈亏</h3>
-                    <div id="chart-monthly-pnl" class="report-chart"></div>
-                </div>
-                <div class="report-chart-card">
-                    <h3 class="chart-card-title">单笔资金规模演变</h3>
-                    <div id="chart-amount-trend" class="report-chart"></div>
-                </div>
-                <div class="report-chart-card">
-                    <h3 class="chart-card-title">板块偏好</h3>
-                    <div id="chart-board-pref" class="report-chart"></div>
-                </div>
-                <div class="report-chart-card">
-                    <h3 class="chart-card-title">个股盈亏 TOP10</h3>
-                    <div id="chart-stock-top10" class="report-chart"></div>
-                </div>
-            </div>
-            <div id="report-summary" class="report-summary"></div>
-        </section>
+            </section>
 
-        <!-- 内容区域：左侧列表 + 右侧图表 -->
-        <section id="content-section" class="content-section" style="display:none;">
-            <div class="content-layout">
-                <!-- 左侧：交易列表 -->
-                <div class="trade-list-panel">
-                    <div class="panel-header">
-                        <h2 class="section-title">盈利交易列表</h2>
-                        <div class="sort-controls">
-                            <select id="sort-select">
-                                <option value="sell_date_desc">卖出日期 ↓</option>
-                                <option value="sell_date_asc">卖出日期 ↑</option>
-                                <option value="profit_desc">盈利金额 ↓</option>
-                                <option value="profit_asc">盈利金额 ↑</option>
-                                <option value="profit_pct_desc">盈利比例 ↓</option>
-                                <option value="profit_pct_asc">盈利比例 ↑</option>
-                                <option value="holding_days_desc">持仓天数 ↓</option>
-                                <option value="holding_days_asc">持仓天数 ↑</option>
-                            </select>
+            <!-- 交易风格分析报告 -->
+            <section id="report-section" class="report-section" style="display:none;">
+                <h2 class="section-title">交易风格分析报告</h2>
+                <div id="report-tags" class="report-tags"></div>
+                <div class="report-grid">
+                    <div class="report-chart-card">
+                        <h3 class="chart-card-title">持仓天数分布</h3>
+                        <div id="chart-holding-days" class="report-chart"></div>
+                    </div>
+                    <div class="report-chart-card">
+                        <h3 class="chart-card-title">盈亏幅度分布</h3>
+                        <div id="chart-profit-dist" class="report-chart"></div>
+                    </div>
+                    <div class="report-chart-card">
+                        <h3 class="chart-card-title">月度盈亏</h3>
+                        <div id="chart-monthly-pnl" class="report-chart"></div>
+                    </div>
+                    <div class="report-chart-card">
+                        <h3 class="chart-card-title">单笔资金规模演变</h3>
+                        <div id="chart-amount-trend" class="report-chart"></div>
+                    </div>
+                    <div class="report-chart-card">
+                        <h3 class="chart-card-title">板块偏好</h3>
+                        <div id="chart-board-pref" class="report-chart"></div>
+                    </div>
+                    <div class="report-chart-card">
+                        <h3 class="chart-card-title">个股盈亏 TOP10</h3>
+                        <div id="chart-stock-top10" class="report-chart"></div>
+                    </div>
+                </div>
+                <div id="report-summary" class="report-summary"></div>
+            </section>
+
+            <!-- 内容区域：左侧列表 + 右侧图表 -->
+            <section id="content-section" class="content-section" style="display:none;">
+                <div class="content-layout">
+                    <!-- 左侧：交易列表 -->
+                    <div class="trade-list-panel">
+                        <div class="panel-header">
+                            <div class="trade-tabs">
+                                <button class="trade-tab active" data-type="profitable">
+                                    盈利 <span id="tab-count-profitable" class="tab-count">0</span>
+                                </button>
+                                <button class="trade-tab" data-type="losing">
+                                    亏损 <span id="tab-count-losing" class="tab-count">0</span>
+                                </button>
+                            </div>
+                            <div class="sort-controls">
+                                <select id="sort-select">
+                                    <option value="sell_date_desc">卖出日期 ↓</option>
+                                    <option value="sell_date_asc">卖出日期 ↑</option>
+                                    <option value="profit_desc">盈亏金额 ↓</option>
+                                    <option value="profit_asc">盈亏金额 ↑</option>
+                                    <option value="profit_pct_desc">盈亏比例 ↓</option>
+                                    <option value="profit_pct_asc">盈亏比例 ↑</option>
+                                    <option value="holding_days_desc">持仓天数 ↓</option>
+                                    <option value="holding_days_asc">持仓天数 ↑</option>
+                                </select>
+                            </div>
                         </div>
+                        <div id="trade-list" class="trade-list"></div>
                     </div>
-                    <div id="trade-list" class="trade-list">
-                        <!-- 交易卡片将由 JS 动态生成 -->
-                    </div>
-                </div>
 
-                <!-- 右侧：K 线图 -->
-                <div class="chart-panel">
-                    <div id="chart-placeholder" class="chart-placeholder">
-                        <p>请从左侧列表点击一笔交易<br>查看对应的 K 线图</p>
+                    <!-- 右侧：K 线图 -->
+                    <div class="chart-panel">
+                        <div id="chart-placeholder" class="chart-placeholder">
+                            <p>请从左侧列表点击一笔交易<br>查看对应的 K 线图</p>
+                        </div>
+                        <div id="chart-loading" class="chart-loading" style="display:none;">
+                            <div class="spinner"></div>
+                            <p>正在加载 K 线数据...</p>
+                        </div>
+                        <div id="chart-info" class="chart-info" style="display:none;">
+                            <span id="chart-stock-name" class="chart-stock-name"></span>
+                            <span id="chart-stock-code" class="chart-stock-code"></span>
+                            <span id="chart-trade-info" class="chart-trade-info"></span>
+                        </div>
+                        <div id="kline-chart" class="kline-chart" style="display:none;"></div>
                     </div>
-                    <div id="chart-loading" class="chart-loading" style="display:none;">
-                        <div class="spinner"></div>
-                        <p>正在加载 K 线数据...</p>
-                    </div>
-                    <div id="chart-info" class="chart-info" style="display:none;">
-                        <span id="chart-stock-name" class="chart-stock-name"></span>
-                        <span id="chart-stock-code" class="chart-stock-code"></span>
-                        <span id="chart-trade-info" class="chart-trade-info"></span>
-                    </div>
-                    <div id="kline-chart" class="kline-chart" style="display:none;"></div>
                 </div>
+            </section>
+        </div>
+
+        <!-- ====== 页面2：个人选股 ====== -->
+        <div id="page-stock-pick" class="page">
+            <div class="empty-page">
+                <div class="empty-page-icon">🎯</div>
+                <h2 class="empty-page-title">个人选股</h2>
+                <p class="empty-page-desc">功能开发中，敬请期待...</p>
             </div>
-        </section>
+        </div>
+
     </main>
 
     <footer class="footer">
-        <p>A 股盈利交易技术分析系统 | 数据来源：akshare</p>
+        <p>Tigger - A 股交易分析系统</p>
     </footer>
 
     <script src="/static/js/chart.js"></script>
