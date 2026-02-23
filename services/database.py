@@ -72,10 +72,28 @@ def init_db():
                 upload_time     TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
             );
 
+            -- 选股交易池表
+            CREATE TABLE IF NOT EXISTS stock_pool (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                stock_code  TEXT NOT NULL,
+                stock_name  TEXT DEFAULT '',
+                add_date    TEXT NOT NULL DEFAULT (date('now','localtime')),
+                score       REAL DEFAULT 0,
+                drop_pct    REAL DEFAULT 0,
+                volume_ratio REAL DEFAULT 0,
+                close_price REAL DEFAULT 0,
+                change_pct  REAL DEFAULT 0,
+                reason      TEXT DEFAULT '',
+                status      TEXT DEFAULT 'active',
+                UNIQUE(stock_code, add_date)
+            );
+
             -- 创建索引加速查询
             CREATE INDEX IF NOT EXISTS idx_matched_profit ON matched_trades(profit);
             CREATE INDEX IF NOT EXISTS idx_matched_sell_date ON matched_trades(sell_date);
             CREATE INDEX IF NOT EXISTS idx_matched_stock_code ON matched_trades(stock_code);
+            CREATE INDEX IF NOT EXISTS idx_pool_status ON stock_pool(status);
+            CREATE INDEX IF NOT EXISTS idx_pool_date ON stock_pool(add_date);
         """)
         conn.commit()
         logger.info("数据库初始化完成: %s", DB_PATH)
@@ -267,4 +285,84 @@ def _row_to_trade_dict(row: sqlite3.Row) -> Dict:
         'profit': row['profit'],
         'profit_pct': row['profit_pct'],
         'holding_days': row['holding_days'],
+    }
+
+
+# ====== 选股交易池 ======
+
+def save_pool_stocks(stocks: List[Dict]):
+    """批量写入选股交易池（同一天同一只股票不重复插入）"""
+    conn = _get_conn()
+    try:
+        conn.executemany(
+            """INSERT OR REPLACE INTO stock_pool
+               (stock_code, stock_name, add_date, score, drop_pct,
+                volume_ratio, close_price, change_pct, reason, status)
+               VALUES (?, ?, date('now','localtime'), ?, ?, ?, ?, ?, ?, 'active')""",
+            [
+                (
+                    s['stock_code'], s['stock_name'], s['score'],
+                    s['drop_pct'], s['volume_ratio'], s.get('close', 0),
+                    s.get('change_pct', 0), s.get('reason', ''),
+                )
+                for s in stocks
+            ]
+        )
+        conn.commit()
+        logger.info("交易池写入 %d 只股票", len(stocks))
+    finally:
+        conn.close()
+
+
+def get_pool_stocks() -> List[Dict]:
+    """获取交易池中所有 active 股票，按评分降序"""
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            """SELECT * FROM stock_pool
+               WHERE status = 'active'
+               ORDER BY score DESC"""
+        ).fetchall()
+        return [_row_to_pool_dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def remove_pool_stock(stock_code: str):
+    """从交易池移除一只股票"""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "UPDATE stock_pool SET status = 'removed' WHERE stock_code = ? AND status = 'active'",
+            (stock_code,)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def clear_pool():
+    """清空交易池"""
+    conn = _get_conn()
+    try:
+        conn.execute("DELETE FROM stock_pool")
+        conn.commit()
+        logger.info("交易池已清空")
+    finally:
+        conn.close()
+
+
+def _row_to_pool_dict(row: sqlite3.Row) -> Dict:
+    """将数据库行转为交易池 dict"""
+    return {
+        'id': row['id'],
+        'stock_code': row['stock_code'],
+        'stock_name': row['stock_name'],
+        'add_date': row['add_date'],
+        'score': row['score'],
+        'drop_pct': row['drop_pct'],
+        'volume_ratio': row['volume_ratio'],
+        'close_price': row['close_price'],
+        'change_pct': row['change_pct'],
+        'reason': row['reason'],
     }

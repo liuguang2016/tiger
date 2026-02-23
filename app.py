@@ -10,6 +10,7 @@ from services.parser import parse_csv
 from services.matcher import match_trades
 from services.stock_data import fetch_kline_data
 from services.analyzer import analyze_trading_style
+from services.screener import start_screening, get_screening_status, fetch_index_info
 from services import database as db
 
 # 配置日志
@@ -103,29 +104,32 @@ def get_kline():
     """
     获取指定交易的 K 线数据
     参数:
-        stock_code: 股票代码
-        buy_date: 买入日期
-        sell_date: 卖出日期
+        stock_code: 股票代码（必需）
+        buy_date: 买入日期（可选，选股模式下不传）
+        sell_date: 卖出日期（可选，选股模式下不传）
     """
     stock_code = request.args.get('stock_code', '').strip()
     buy_date = request.args.get('buy_date', '').strip()
     sell_date = request.args.get('sell_date', '').strip()
 
-    if not all([stock_code, buy_date, sell_date]):
+    if not stock_code:
         return jsonify({
             'success': False,
-            'message': '缺少参数：stock_code, buy_date, sell_date',
+            'message': '缺少参数：stock_code',
         }), 400
 
-    # 获取 K 线数据
+    if not buy_date or not sell_date:
+        from datetime import datetime, timedelta
+        sell_date = datetime.now().strftime('%Y-%m-%d')
+        buy_date = (datetime.now() - timedelta(days=120)).strftime('%Y-%m-%d')
+
     kline_data = fetch_kline_data(stock_code, buy_date, sell_date)
 
     if not kline_data['success']:
         return jsonify(kline_data), 500
 
-    # 附带买入/卖出标记信息
-    kline_data['buy_date'] = buy_date
-    kline_data['sell_date'] = sell_date
+    kline_data['buy_date'] = request.args.get('buy_date', '').strip() or ''
+    kline_data['sell_date'] = request.args.get('sell_date', '').strip() or ''
 
     return jsonify(kline_data)
 
@@ -142,6 +146,67 @@ def get_report():
     trade_result = db.get_trade_result_for_report()
     report = analyze_trading_style(trade_result)
     return jsonify({'success': True, 'report': report})
+
+
+@app.route('/api/screener/run', methods=['POST'])
+def run_screener():
+    """启动弹簧选股筛选任务"""
+    params = request.get_json(silent=True) or {}
+    task_id = start_screening(params)
+    return jsonify({'success': True, 'task_id': task_id})
+
+
+_screener_saved_task_id = None
+
+@app.route('/api/screener/status')
+def screener_status():
+    """获取筛选任务进度和结果"""
+    global _screener_saved_task_id
+    status = get_screening_status()
+
+    if status['status'] == 'done' and status['results'] and \
+       status.get('task_id') != _screener_saved_task_id:
+        db.save_pool_stocks(status['results'])
+        _screener_saved_task_id = status.get('task_id')
+
+    return jsonify({
+        'success': True,
+        'status': status['status'],
+        'progress': status['progress'],
+        'total': status['total'],
+        'found': status['found'],
+        'message': status['message'],
+        'index_info': status.get('index_info', {}),
+        'results': status['results'] if status['status'] == 'done' else [],
+    })
+
+
+@app.route('/api/screener/index')
+def get_index():
+    """获取大盘指数信息"""
+    info = fetch_index_info()
+    return jsonify({'success': True, 'index': info})
+
+
+@app.route('/api/screener/pool')
+def get_pool():
+    """获取交易池列表"""
+    stocks = db.get_pool_stocks()
+    return jsonify({'success': True, 'stocks': stocks})
+
+
+@app.route('/api/screener/pool/<stock_code>', methods=['DELETE'])
+def remove_from_pool(stock_code):
+    """从交易池移除一只股票"""
+    db.remove_pool_stock(stock_code)
+    return jsonify({'success': True})
+
+
+@app.route('/api/screener/pool', methods=['DELETE'])
+def clear_pool_api():
+    """清空交易池"""
+    db.clear_pool()
+    return jsonify({'success': True})
 
 
 if __name__ == '__main__':

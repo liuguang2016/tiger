@@ -171,11 +171,87 @@
 
         <!-- ====== 页面2：个人选股 ====== -->
         <div id="page-stock-pick" class="page">
-            <div class="empty-page">
-                <div class="empty-page-icon">🎯</div>
-                <h2 class="empty-page-title">个人选股</h2>
-                <p class="empty-page-desc">功能开发中，敬请期待...</p>
-            </div>
+
+            <!-- 大盘指数状态栏 -->
+            <section class="index-bar" id="index-bar">
+                <div class="index-item" id="index-sh">
+                    <span class="index-name">上证指数</span>
+                    <span class="index-value" id="idx-sh-val">--</span>
+                    <span class="index-change" id="idx-sh-chg">--</span>
+                </div>
+                <div class="index-item" id="index-sz">
+                    <span class="index-name">深证成指</span>
+                    <span class="index-value" id="idx-sz-val">--</span>
+                    <span class="index-change" id="idx-sz-chg">--</span>
+                </div>
+            </section>
+
+            <!-- 筛选控制栏 -->
+            <section class="screener-controls">
+                <div class="screener-params">
+                    <label class="param-group">
+                        <span class="param-label">跌幅阈值</span>
+                        <select id="param-drop-pct">
+                            <option value="20">≥20%</option>
+                            <option value="25" selected>≥25%</option>
+                            <option value="30">≥30%</option>
+                            <option value="35">≥35%</option>
+                        </select>
+                    </label>
+                    <label class="param-group">
+                        <span class="param-label">量比阈值</span>
+                        <select id="param-vol-ratio">
+                            <option value="1.0">≥1.0</option>
+                            <option value="1.5" selected>≥1.5</option>
+                            <option value="2.0">≥2.0</option>
+                            <option value="3.0">≥3.0</option>
+                        </select>
+                    </label>
+                    <button id="btn-start-screen" class="btn-screen">开始筛选</button>
+                </div>
+                <div id="screener-progress" class="screener-progress" style="display:none;">
+                    <div class="progress-bar-track">
+                        <div id="progress-bar-fill" class="progress-bar-fill" style="width:0%"></div>
+                    </div>
+                    <span id="progress-text" class="progress-text">准备中...</span>
+                </div>
+            </section>
+
+            <!-- 交易池 + K线 双栏布局 -->
+            <section class="pool-section">
+                <div class="pool-layout">
+                    <!-- 左侧：交易池列表 -->
+                    <div class="pool-list-panel">
+                        <div class="pool-header">
+                            <h3 class="pool-title">交易池 <span id="pool-count" class="pool-count">0</span></h3>
+                            <button id="btn-clear-pool" class="btn-clear-pool">清空</button>
+                        </div>
+                        <div id="pool-list" class="pool-list">
+                            <div class="pool-empty">
+                                <p>暂无选股结果</p>
+                                <p class="pool-empty-hint">点击「开始筛选」扫描全A股</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右侧：K线图 -->
+                    <div class="pool-chart-panel">
+                        <div id="pool-chart-placeholder" class="chart-placeholder">
+                            <p>从左侧交易池选择一只股票<br>查看 K 线走势</p>
+                        </div>
+                        <div id="pool-chart-loading" class="chart-loading" style="display:none;">
+                            <div class="spinner"></div>
+                            <p>正在加载 K 线数据...</p>
+                        </div>
+                        <div id="pool-chart-info" class="chart-info" style="display:none;">
+                            <span id="pool-stock-name" class="chart-stock-name"></span>
+                            <span id="pool-stock-code" class="chart-stock-code"></span>
+                            <span id="pool-stock-meta" class="chart-trade-info"></span>
+                        </div>
+                        <div id="pool-kline-chart" class="kline-chart" style="display:none;"></div>
+                    </div>
+                </div>
+            </section>
         </div>
 
     </main>

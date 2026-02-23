@@ -735,6 +735,385 @@ body {
 }
 
 /* ============================
+   个人选股 - 大盘指数栏
+   ============================ */
+.index-bar {
+    display: flex;
+    gap: 24px;
+    padding: 12px 20px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+}
+
+.index-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.index-name {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.index-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.index-change {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.index-change.up {
+    color: var(--color-red);
+    background: var(--color-red-bg);
+}
+
+.index-change.down {
+    color: var(--color-green);
+    background: var(--color-green-bg);
+}
+
+/* ============================
+   个人选股 - 筛选控制栏
+   ============================ */
+.screener-controls {
+    padding: 16px 20px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+}
+
+.screener-params {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.param-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.param-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.param-group select {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.btn-screen {
+    padding: 8px 24px;
+    background: linear-gradient(135deg, #f85149, #d29922);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.btn-screen:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.btn-screen:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.screener-progress {
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.progress-bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-primary);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #f85149, #d29922);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    min-width: 180px;
+}
+
+/* ============================
+   个人选股 - 交易池布局
+   ============================ */
+.pool-section {
+    margin-bottom: 24px;
+}
+
+.pool-layout {
+    display: flex;
+    gap: 20px;
+    height: 640px;
+}
+
+.pool-list-panel {
+    width: 360px;
+    min-width: 360px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.pool-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.pool-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pool-count {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(248, 81, 73, 0.15);
+    color: var(--color-red);
+}
+
+.btn-clear-pool {
+    padding: 4px 12px;
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-clear-pool:hover {
+    color: var(--color-red);
+    border-color: var(--color-red);
+}
+
+.pool-list {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.pool-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.pool-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.pool-list::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.pool-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: var(--text-muted);
+    font-size: 14px;
+    text-align: center;
+}
+
+.pool-empty-hint {
+    font-size: 12px;
+    margin-top: 6px;
+}
+
+/* 交易池股票卡片 */
+.pool-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    position: relative;
+}
+
+.pool-card:hover {
+    background: var(--bg-hover);
+    border-color: var(--color-blue);
+}
+
+.pool-card.active {
+    border-color: var(--color-blue);
+    background: rgba(88, 166, 255, 0.08);
+}
+
+.pool-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.pool-card-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.pool-card-code {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: 6px;
+}
+
+.pool-card-score {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-yellow);
+}
+
+.pool-card-tags {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.pool-tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.pool-tag.drop {
+    color: var(--color-green);
+    background: var(--color-green-bg);
+}
+
+.pool-tag.vol {
+    color: var(--color-red);
+    background: var(--color-red-bg);
+}
+
+.pool-tag.price {
+    color: var(--text-secondary);
+    background: rgba(139, 148, 158, 0.1);
+}
+
+.pool-card-remove {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+}
+
+.pool-card:hover .pool-card-remove {
+    display: flex;
+}
+
+.pool-card-remove:hover {
+    color: var(--color-red);
+    background: var(--color-red-bg);
+}
+
+/* 右侧K线面板 */
+.pool-chart-panel {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+@media (max-width: 1024px) {
+    .pool-layout {
+        flex-direction: column;
+        height: auto;
+    }
+
+    .pool-list-panel {
+        width: 100%;
+        min-width: unset;
+        height: auto;
+    }
+
+    .pool-list {
+        max-height: 300px;
+    }
+
+    .pool-chart-panel {
+        height: 500px;
+    }
+
+    .index-bar {
+        flex-wrap: wrap;
+    }
+
+    .screener-params {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+/* ============================
    页脚
    ============================ */
 .footer {
