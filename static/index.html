@@ -20,6 +20,9 @@
                 <a href="#" class="nav-item" data-page="stock-pick">
                     <span class="nav-icon">🎯</span>个人选股
                 </a>
+                <a href="#" class="nav-item" data-page="crypto">
+                    <span class="nav-icon">₿</span>数字货币
+                </a>
             </nav>
         </div>
     </header>
@@ -273,6 +276,254 @@
                             <span id="pool-stock-meta" class="chart-trade-info"></span>
                         </div>
                         <div id="pool-kline-chart" class="kline-chart" style="display:none;"></div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- ====== 页面3：数字货币 ====== -->
+        <div id="page-crypto" class="page">
+
+            <!-- API 配置栏 -->
+            <section class="crypto-config-bar">
+                <div class="config-row">
+                    <div class="config-field">
+                        <label class="config-label">API Key</label>
+                        <input type="password" id="crypto-api-key" class="config-input" placeholder="Binance API Key">
+                    </div>
+                    <div class="config-field">
+                        <label class="config-label">API Secret</label>
+                        <input type="password" id="crypto-api-secret" class="config-input" placeholder="Binance API Secret">
+                    </div>
+                    <button id="btn-save-crypto-config" class="btn-config-save">保存配置</button>
+                    <span id="crypto-config-status" class="config-status"></span>
+                </div>
+            </section>
+
+            <!-- 策略参数 + 控制栏 -->
+            <section class="crypto-control-bar">
+                <div class="crypto-params">
+                    <label class="param-group">
+                        <span class="param-label">模式</span>
+                        <select id="crypto-mode">
+                            <option value="paper" selected>模拟盘</option>
+                            <option value="live">实盘</option>
+                        </select>
+                    </label>
+                    <label class="param-group">
+                        <span class="param-label">跌幅</span>
+                        <select id="crypto-drop-pct">
+                            <option value="10">≥10%</option>
+                            <option value="15" selected>≥15%</option>
+                            <option value="20">≥20%</option>
+                            <option value="25">≥25%</option>
+                        </select>
+                    </label>
+                    <label class="param-group">
+                        <span class="param-label">止损</span>
+                        <select id="crypto-stop-loss">
+                            <option value="3">-3%</option>
+                            <option value="5" selected>-5%</option>
+                            <option value="8">-8%</option>
+                        </select>
+                    </label>
+                    <label class="param-group">
+                        <span class="param-label">止盈1</span>
+                        <select id="crypto-tp1">
+                            <option value="5">+5%</option>
+                            <option value="8" selected>+8%</option>
+                            <option value="10">+10%</option>
+                        </select>
+                    </label>
+                    <label class="param-group">
+                        <span class="param-label">止盈2</span>
+                        <select id="crypto-tp2">
+                            <option value="10">+10%</option>
+                            <option value="15" selected>+15%</option>
+                            <option value="20">+20%</option>
+                        </select>
+                    </label>
+                    <label class="param-group">
+                        <span class="param-label">单仓</span>
+                        <select id="crypto-max-pos-pct">
+                            <option value="5">5%</option>
+                            <option value="10" selected>10%</option>
+                            <option value="15">15%</option>
+                            <option value="20">20%</option>
+                        </select>
+                    </label>
+                    <label class="param-group">
+                        <span class="param-label">持仓数</span>
+                        <select id="crypto-max-positions">
+                            <option value="3">3个</option>
+                            <option value="5" selected>5个</option>
+                            <option value="8">8个</option>
+                            <option value="10">10个</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="crypto-actions">
+                    <button id="btn-start-bot" class="btn-bot-start">启动机器人</button>
+                    <button id="btn-stop-bot" class="btn-bot-stop" disabled>停止</button>
+                    <button id="btn-manual-scan" class="btn-manual-scan">手动扫描</button>
+                    <span id="bot-status-indicator" class="bot-status-dot"></span>
+                    <span id="bot-status-text" class="bot-status-text">未启动</span>
+                </div>
+            </section>
+
+            <!-- 账户仪表盘 -->
+            <section class="crypto-dashboard">
+                <div class="dash-card">
+                    <span class="dash-label">USDT 余额</span>
+                    <span id="dash-balance" class="dash-value">--</span>
+                </div>
+                <div class="dash-card">
+                    <span class="dash-label">持仓数</span>
+                    <span id="dash-pos-count" class="dash-value">0 / 5</span>
+                </div>
+                <div class="dash-card">
+                    <span class="dash-label">浮动盈亏</span>
+                    <span id="dash-unrealized" class="dash-value">--</span>
+                </div>
+                <div class="dash-card">
+                    <span class="dash-label">历史胜率</span>
+                    <span id="dash-win-rate" class="dash-value">--</span>
+                </div>
+                <div class="dash-card">
+                    <span class="dash-label">累计盈亏</span>
+                    <span id="dash-total-pnl" class="dash-value">--</span>
+                </div>
+                <div class="dash-card">
+                    <span class="dash-label">上次扫描</span>
+                    <span id="dash-last-scan" class="dash-value small">--</span>
+                </div>
+            </section>
+
+            <!-- 回测面板 -->
+            <section class="backtest-section">
+                <div class="backtest-header">
+                    <h3 class="backtest-title">策略回测</h3>
+                    <span class="backtest-hint">使用历史K线数据验证交易策略</span>
+                </div>
+                <div class="backtest-controls">
+                    <label class="param-group">
+                        <span class="param-label">回测天数</span>
+                        <select id="bt-days">
+                            <option value="30">30天</option>
+                            <option value="90">90天</option>
+                            <option value="180" selected>180天</option>
+                            <option value="365">1年</option>
+                        </select>
+                    </label>
+                    <label class="param-group">
+                        <span class="param-label">初始资金</span>
+                        <select id="bt-capital">
+                            <option value="1000">1,000 USDT</option>
+                            <option value="5000">5,000 USDT</option>
+                            <option value="10000" selected>10,000 USDT</option>
+                            <option value="50000">50,000 USDT</option>
+                        </select>
+                    </label>
+                    <label class="param-group">
+                        <span class="param-label">K线周期</span>
+                        <select id="bt-interval">
+                            <option value="1h">1小时</option>
+                            <option value="4h" selected>4小时</option>
+                            <option value="1d">1天</option>
+                        </select>
+                    </label>
+                    <button id="btn-run-backtest" class="btn-run-backtest">运行回测</button>
+                </div>
+                <div id="bt-progress" class="backtest-progress" style="display:none;">
+                    <div class="progress-bar-track">
+                        <div id="bt-progress-fill" class="progress-bar-fill" style="width:0%"></div>
+                    </div>
+                    <span id="bt-progress-text" class="progress-text">准备中...</span>
+                </div>
+
+                <!-- 回测结果 -->
+                <div id="bt-results" class="backtest-results" style="display:none;">
+                    <div class="bt-metrics-grid">
+                        <div class="bt-metric-card">
+                            <span class="bt-metric-label">总收益</span>
+                            <span id="bt-total-return" class="bt-metric-value">--</span>
+                        </div>
+                        <div class="bt-metric-card">
+                            <span class="bt-metric-label">年化收益</span>
+                            <span id="bt-annual-return" class="bt-metric-value">--</span>
+                        </div>
+                        <div class="bt-metric-card">
+                            <span class="bt-metric-label">胜率</span>
+                            <span id="bt-win-rate" class="bt-metric-value">--</span>
+                        </div>
+                        <div class="bt-metric-card">
+                            <span class="bt-metric-label">最大回撤</span>
+                            <span id="bt-max-dd" class="bt-metric-value">--</span>
+                        </div>
+                        <div class="bt-metric-card">
+                            <span class="bt-metric-label">盈亏比</span>
+                            <span id="bt-profit-factor" class="bt-metric-value">--</span>
+                        </div>
+                        <div class="bt-metric-card">
+                            <span class="bt-metric-label">夏普比率</span>
+                            <span id="bt-sharpe" class="bt-metric-value">--</span>
+                        </div>
+                        <div class="bt-metric-card">
+                            <span class="bt-metric-label">交易笔数</span>
+                            <span id="bt-trade-count" class="bt-metric-value">--</span>
+                        </div>
+                        <div class="bt-metric-card">
+                            <span class="bt-metric-label">最终资金</span>
+                            <span id="bt-final-bal" class="bt-metric-value">--</span>
+                        </div>
+                    </div>
+
+                    <!-- 资金曲线 -->
+                    <div class="bt-equity-chart-wrap">
+                        <h4 class="bt-section-title">资金曲线</h4>
+                        <div id="bt-equity-chart" class="bt-equity-chart"></div>
+                    </div>
+
+                    <!-- 交易明细 -->
+                    <div class="bt-trades-wrap">
+                        <h4 class="bt-section-title">交易明细 <span id="bt-trades-count" class="bt-trades-count"></span></h4>
+                        <div id="bt-trades-table" class="bt-trades-table"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 信号/持仓/交易 + K线 双栏布局 -->
+            <section class="crypto-main-section">
+                <div class="crypto-layout">
+                    <!-- 左侧：Tab 切换列表 -->
+                    <div class="crypto-list-panel">
+                        <div class="crypto-tabs">
+                            <button class="crypto-tab active" data-tab="signals">信号</button>
+                            <button class="crypto-tab" data-tab="positions">持仓</button>
+                            <button class="crypto-tab" data-tab="trades">交易记录</button>
+                        </div>
+                        <div id="crypto-list-container" class="crypto-list-container">
+                            <div class="crypto-empty">
+                                <p>暂无数据</p>
+                                <p class="crypto-empty-hint">点击「手动扫描」或启动机器人</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右侧：K线图 -->
+                    <div class="crypto-chart-panel">
+                        <div id="crypto-chart-placeholder" class="chart-placeholder">
+                            <p>从左侧列表选择一个币种<br>查看 K 线走势</p>
+                        </div>
+                        <div id="crypto-chart-loading" class="chart-loading" style="display:none;">
+                            <div class="spinner"></div>
+                            <p>正在加载 K 线数据...</p>
+                        </div>
+                        <div id="crypto-chart-info" class="chart-info" style="display:none;">
+                            <span id="crypto-chart-symbol" class="chart-stock-name"></span>
+                            <span id="crypto-chart-meta" class="chart-trade-info"></span>
+                        </div>
+                        <div id="crypto-kline-chart" class="kline-chart" style="display:none;"></div>
                     </div>
                 </div>
             </section>

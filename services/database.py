@@ -92,12 +92,70 @@ def init_db():
                 UNIQUE(stock_code, add_date)
             );
 
+            -- 加密货币交易记录
+            CREATE TABLE IF NOT EXISTS crypto_trades (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol       TEXT NOT NULL,
+                side         TEXT NOT NULL,
+                price        REAL NOT NULL,
+                quantity     REAL NOT NULL,
+                amount       REAL NOT NULL,
+                fee          REAL DEFAULT 0,
+                pnl          REAL DEFAULT 0,
+                signal_score REAL DEFAULT 0,
+                signal_reason TEXT DEFAULT '',
+                trade_time   TEXT NOT NULL,
+                status       TEXT DEFAULT 'filled'
+            );
+
+            -- 机器人配置（单行表）
+            CREATE TABLE IF NOT EXISTS crypto_config (
+                id              INTEGER PRIMARY KEY CHECK (id = 1),
+                api_key         TEXT DEFAULT '',
+                api_secret      TEXT DEFAULT '',
+                is_running      INTEGER DEFAULT 0,
+                config_json     TEXT DEFAULT '{}',
+                updated_at      TEXT DEFAULT (datetime('now','localtime'))
+            );
+
             -- 创建索引加速查询
             CREATE INDEX IF NOT EXISTS idx_matched_profit ON matched_trades(profit);
             CREATE INDEX IF NOT EXISTS idx_matched_sell_date ON matched_trades(sell_date);
             CREATE INDEX IF NOT EXISTS idx_matched_stock_code ON matched_trades(stock_code);
             CREATE INDEX IF NOT EXISTS idx_pool_status ON stock_pool(status);
             CREATE INDEX IF NOT EXISTS idx_pool_date ON stock_pool(add_date);
+            -- 回测运行记录
+            CREATE TABLE IF NOT EXISTS crypto_backtest_runs (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id       TEXT NOT NULL UNIQUE,
+                params_json  TEXT NOT NULL,
+                status       TEXT DEFAULT 'running',
+                start_time   TEXT NOT NULL,
+                end_time     TEXT,
+                summary_json TEXT,
+                equity_json  TEXT
+            );
+
+            -- 回测逐笔交易
+            CREATE TABLE IF NOT EXISTS crypto_backtest_trades (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id       TEXT NOT NULL,
+                symbol       TEXT NOT NULL,
+                side         TEXT NOT NULL,
+                entry_time   TEXT,
+                entry_price  REAL,
+                exit_time    TEXT,
+                exit_price   REAL,
+                quantity     REAL,
+                pnl          REAL,
+                pnl_pct      REAL,
+                exit_reason  TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_crypto_trades_symbol ON crypto_trades(symbol);
+            CREATE INDEX IF NOT EXISTS idx_crypto_trades_time ON crypto_trades(trade_time);
+            CREATE INDEX IF NOT EXISTS idx_bt_runs_id ON crypto_backtest_runs(run_id);
+            CREATE INDEX IF NOT EXISTS idx_bt_trades_run ON crypto_backtest_trades(run_id);
         """)
         conn.commit()
 
@@ -383,6 +441,304 @@ def clear_pool():
         logger.info("交易池已清空")
     finally:
         conn.close()
+
+
+# ====== 加密货币配置 ======
+
+def save_crypto_config(api_key: str, api_secret: str, config: dict):
+    """保存加密货币机器人配置"""
+    conn = _get_conn()
+    try:
+        config_json = json.dumps(config, ensure_ascii=False)
+        conn.execute(
+            """INSERT INTO crypto_config (id, api_key, api_secret, config_json, updated_at)
+               VALUES (1, ?, ?, ?, datetime('now','localtime'))
+               ON CONFLICT(id) DO UPDATE SET
+                   api_key = excluded.api_key,
+                   api_secret = excluded.api_secret,
+                   config_json = excluded.config_json,
+                   updated_at = datetime('now','localtime')""",
+            (api_key, api_secret, config_json),
+        )
+        conn.commit()
+        logger.info("加密货币配置已保存")
+    finally:
+        conn.close()
+
+
+def get_crypto_config() -> Optional[Dict]:
+    """获取加密货币机器人配置"""
+    conn = _get_conn()
+    try:
+        row = conn.execute("SELECT * FROM crypto_config WHERE id = 1").fetchone()
+        if not row:
+            return None
+        config_json = row["config_json"] or "{}"
+        try:
+            config = json.loads(config_json)
+        except (json.JSONDecodeError, TypeError):
+            config = {}
+        return {
+            "api_key": row["api_key"] or "",
+            "api_secret": row["api_secret"] or "",
+            "is_running": bool(row["is_running"]),
+            "config": config,
+            "updated_at": row["updated_at"] or "",
+        }
+    finally:
+        conn.close()
+
+
+def set_crypto_running(running: bool):
+    """更新机器人运行状态"""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            """INSERT INTO crypto_config (id, is_running, updated_at)
+               VALUES (1, ?, datetime('now','localtime'))
+               ON CONFLICT(id) DO UPDATE SET
+                   is_running = excluded.is_running,
+                   updated_at = datetime('now','localtime')""",
+            (1 if running else 0,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ====== 加密货币交易记录 ======
+
+def save_crypto_trade(trade: Dict):
+    """写入一条加密货币交易记录"""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            """INSERT INTO crypto_trades
+               (symbol, side, price, quantity, amount, fee, pnl,
+                signal_score, signal_reason, trade_time, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                trade["symbol"], trade["side"], trade["price"],
+                trade["quantity"], trade["amount"], trade.get("fee", 0),
+                trade.get("pnl", 0), trade.get("signal_score", 0),
+                trade.get("signal_reason", ""), trade["trade_time"],
+                trade.get("status", "filled"),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_crypto_trades(limit: int = 100, symbol: str = None) -> List[Dict]:
+    """获取加密货币交易记录"""
+    conn = _get_conn()
+    try:
+        if symbol:
+            rows = conn.execute(
+                "SELECT * FROM crypto_trades WHERE symbol = ? ORDER BY trade_time DESC LIMIT ?",
+                (symbol, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM crypto_trades ORDER BY trade_time DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [_row_to_crypto_trade(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_crypto_trade_stats() -> Dict:
+    """获取加密货币交易汇总统计"""
+    conn = _get_conn()
+    try:
+        row = conn.execute("""
+            SELECT
+                COUNT(*) as total,
+                SUM(CASE WHEN side='SELL' AND pnl > 0 THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN side='SELL' AND pnl <= 0 THEN 1 ELSE 0 END) as losses,
+                SUM(CASE WHEN side='SELL' THEN pnl ELSE 0 END) as total_pnl,
+                SUM(fee) as total_fee
+            FROM crypto_trades
+        """).fetchone()
+        total_sells = (row["wins"] or 0) + (row["losses"] or 0)
+        return {
+            "total_trades": row["total"] or 0,
+            "wins": row["wins"] or 0,
+            "losses": row["losses"] or 0,
+            "win_rate": round(row["wins"] / total_sells * 100, 1) if total_sells > 0 else 0,
+            "total_pnl": round(row["total_pnl"] or 0, 2),
+            "total_fee": round(row["total_fee"] or 0, 2),
+        }
+    finally:
+        conn.close()
+
+
+def _row_to_crypto_trade(row: sqlite3.Row) -> Dict:
+    return {
+        "id": row["id"],
+        "symbol": row["symbol"],
+        "side": row["side"],
+        "price": row["price"],
+        "quantity": row["quantity"],
+        "amount": row["amount"],
+        "fee": row["fee"],
+        "pnl": row["pnl"],
+        "signal_score": row["signal_score"],
+        "signal_reason": row["signal_reason"],
+        "trade_time": row["trade_time"],
+        "status": row["status"],
+    }
+
+
+# ====== 回测记录 ======
+
+def save_backtest_run(run_id: str, params: dict, start_time: str):
+    """创建一条回测记录"""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            """INSERT INTO crypto_backtest_runs (run_id, params_json, status, start_time)
+               VALUES (?, ?, 'running', ?)""",
+            (run_id, json.dumps(params, ensure_ascii=False), start_time),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_backtest_run(run_id: str, status: str, summary: dict, equity: list,
+                        end_time: str):
+    """更新回测结果"""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            """UPDATE crypto_backtest_runs
+               SET status = ?, summary_json = ?, equity_json = ?, end_time = ?
+               WHERE run_id = ?""",
+            (
+                status,
+                json.dumps(summary, ensure_ascii=False),
+                json.dumps(equity, ensure_ascii=False),
+                end_time,
+                run_id,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def save_backtest_trades(run_id: str, trades: List[Dict]):
+    """批量写入回测交易"""
+    conn = _get_conn()
+    try:
+        conn.executemany(
+            """INSERT INTO crypto_backtest_trades
+               (run_id, symbol, side, entry_time, entry_price,
+                exit_time, exit_price, quantity, pnl, pnl_pct, exit_reason)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [
+                (
+                    run_id, t["symbol"], t.get("side", "ROUND"),
+                    t.get("entry_time", ""), t.get("entry_price", 0),
+                    t.get("exit_time", ""), t.get("exit_price", 0),
+                    t.get("quantity", 0), t.get("pnl", 0),
+                    t.get("pnl_pct", 0), t.get("exit_reason", ""),
+                )
+                for t in trades
+            ],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_backtest_run(run_id: str) -> Optional[Dict]:
+    """获取单条回测结果"""
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM crypto_backtest_runs WHERE run_id = ?", (run_id,)
+        ).fetchone()
+        if not row:
+            return None
+        return _row_to_bt_run(row)
+    finally:
+        conn.close()
+
+
+def get_backtest_history(limit: int = 20) -> List[Dict]:
+    """获取回测历史列表"""
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM crypto_backtest_runs ORDER BY start_time DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [_row_to_bt_run(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_backtest_trades(run_id: str) -> List[Dict]:
+    """获取某次回测的交易明细"""
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM crypto_backtest_trades WHERE run_id = ? ORDER BY entry_time",
+            (run_id,),
+        ).fetchall()
+        return [
+            {
+                "id": r["id"],
+                "symbol": r["symbol"],
+                "side": r["side"],
+                "entry_time": r["entry_time"],
+                "entry_price": r["entry_price"],
+                "exit_time": r["exit_time"],
+                "exit_price": r["exit_price"],
+                "quantity": r["quantity"],
+                "pnl": r["pnl"],
+                "pnl_pct": r["pnl_pct"],
+                "exit_reason": r["exit_reason"],
+            }
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
+def _row_to_bt_run(row: sqlite3.Row) -> Dict:
+    summary = {}
+    equity = []
+    try:
+        if row["summary_json"]:
+            summary = json.loads(row["summary_json"])
+    except (json.JSONDecodeError, TypeError):
+        pass
+    try:
+        if row["equity_json"]:
+            equity = json.loads(row["equity_json"])
+    except (json.JSONDecodeError, TypeError):
+        pass
+    params = {}
+    try:
+        if row["params_json"]:
+            params = json.loads(row["params_json"])
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return {
+        "id": row["id"],
+        "run_id": row["run_id"],
+        "params": params,
+        "status": row["status"],
+        "start_time": row["start_time"],
+        "end_time": row["end_time"] or "",
+        "summary": summary,
+        "equity": equity,
+    }
 
 
 def _row_to_pool_dict(row: sqlite3.Row) -> Dict:

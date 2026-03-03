@@ -1135,6 +1135,505 @@ body {
 }
 
 /* ============================
+   数字货币 - API配置栏
+   ============================ */
+.crypto-config-bar {
+    padding: 14px 20px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+}
+
+.config-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.config-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.config-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.config-input {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 13px;
+    width: 200px;
+}
+
+.config-input:focus {
+    outline: none;
+    border-color: var(--color-blue);
+}
+
+.btn-config-save {
+    padding: 7px 20px;
+    background: var(--color-blue);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+}
+
+.btn-config-save:hover {
+    opacity: 0.9;
+}
+
+.config-status {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.config-status.ok {
+    color: var(--color-green);
+}
+
+.config-status.error {
+    color: var(--color-red);
+}
+
+/* ============================
+   数字货币 - 控制栏
+   ============================ */
+.crypto-control-bar {
+    padding: 14px 20px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.crypto-params {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.crypto-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.btn-bot-start {
+    padding: 8px 24px;
+    background: linear-gradient(135deg, #f85149, #d29922);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.btn-bot-start:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.btn-bot-start:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-bot-stop {
+    padding: 8px 20px;
+    background: transparent;
+    color: var(--color-red);
+    border: 1px solid var(--color-red);
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.btn-bot-stop:hover {
+    background: var(--color-red-bg);
+}
+
+.btn-bot-stop:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.btn-manual-scan {
+    padding: 8px 20px;
+    background: transparent;
+    color: var(--color-blue);
+    border: 1px solid var(--color-blue);
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.btn-manual-scan:hover {
+    background: rgba(88, 166, 255, 0.08);
+}
+
+.btn-manual-scan:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.bot-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    display: inline-block;
+    margin-left: 8px;
+}
+
+.bot-status-dot.active {
+    background: var(--color-green);
+    box-shadow: 0 0 6px var(--color-green);
+    animation: botPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes botPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.bot-status-text {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* ============================
+   数字货币 - 仪表盘
+   ============================ */
+.crypto-dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.dash-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 14px;
+    text-align: center;
+}
+
+.dash-label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.dash-value {
+    display: block;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.dash-value.small {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+
+.dash-value.profit {
+    color: var(--color-red);
+}
+
+.dash-value.loss {
+    color: var(--color-green);
+}
+
+/* ============================
+   数字货币 - 列表 + K线布局
+   ============================ */
+.crypto-main-section {
+    margin-bottom: 24px;
+}
+
+.crypto-layout {
+    display: flex;
+    gap: 20px;
+    height: 640px;
+}
+
+.crypto-list-panel {
+    width: 380px;
+    min-width: 380px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.crypto-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 3px;
+    margin-bottom: 10px;
+}
+
+.crypto-tab {
+    flex: 1;
+    padding: 6px 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+}
+
+.crypto-tab:hover {
+    color: var(--text-primary);
+}
+
+.crypto-tab.active {
+    background: rgba(88, 166, 255, 0.15);
+    color: var(--color-blue);
+}
+
+.crypto-list-container {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.crypto-list-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.crypto-list-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.crypto-list-container::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.crypto-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: var(--text-muted);
+    font-size: 14px;
+    text-align: center;
+}
+
+.crypto-empty-hint {
+    font-size: 12px;
+    margin-top: 6px;
+}
+
+/* 数字货币卡片 */
+.crypto-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.crypto-card:hover {
+    background: var(--bg-hover);
+    border-color: var(--color-blue);
+}
+
+.crypto-card.active {
+    border-color: var(--color-blue);
+    background: rgba(88, 166, 255, 0.08);
+}
+
+.crypto-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.crypto-card-symbol {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.5px;
+}
+
+.crypto-card-score {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-yellow);
+}
+
+.crypto-card-pnl {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.crypto-card-pnl.profit {
+    color: var(--color-red);
+}
+
+.crypto-card-pnl.loss {
+    color: var(--color-green);
+}
+
+.crypto-card-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.crypto-card-tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.crypto-tag {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 500;
+}
+
+.crypto-tag.pattern {
+    color: var(--color-yellow);
+    background: rgba(210, 153, 34, 0.15);
+}
+
+.crypto-tag.ma {
+    color: var(--color-blue);
+    background: rgba(88, 166, 255, 0.12);
+}
+
+.crypto-tag.signal {
+    color: var(--color-purple);
+    background: rgba(188, 140, 255, 0.12);
+}
+
+.crypto-tag.tp1 {
+    color: var(--color-green);
+    background: var(--color-green-bg);
+}
+
+.crypto-tag.paper {
+    color: var(--color-orange);
+    background: rgba(219, 109, 40, 0.12);
+}
+
+.crypto-side {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 1px 8px;
+    border-radius: 3px;
+}
+
+.crypto-side.buy {
+    color: var(--color-red);
+    background: var(--color-red-bg);
+}
+
+.crypto-side.sell {
+    color: var(--color-green);
+    background: var(--color-green-bg);
+}
+
+.crypto-card-time {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* 右侧K线面板 */
+.crypto-chart-panel {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* 数字货币响应式 */
+@media (max-width: 1024px) {
+    .crypto-layout {
+        flex-direction: column;
+        height: auto;
+    }
+
+    .crypto-list-panel {
+        width: 100%;
+        min-width: unset;
+        height: auto;
+    }
+
+    .crypto-list-container {
+        max-height: 300px;
+    }
+
+    .crypto-chart-panel {
+        height: 500px;
+    }
+
+    .crypto-params {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .config-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .config-input {
+        width: 100%;
+    }
+}
+
+/* ============================
    页脚
    ============================ */
 .footer {
@@ -1181,5 +1680,232 @@ body {
 
     .drop-zone {
         padding: 32px 16px;
+    }
+}
+
+/* ============================
+   回测面板
+   ============================ */
+.backtest-section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    margin-bottom: 16px;
+}
+
+.backtest-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.backtest-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.backtest-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.backtest-controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.btn-run-backtest {
+    padding: 8px 24px;
+    background: linear-gradient(135deg, #58a6ff, #bc8cff);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.btn-run-backtest:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.btn-run-backtest:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.backtest-progress {
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.backtest-results {
+    margin-top: 18px;
+}
+
+.bt-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.bt-metric-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 12px;
+    text-align: center;
+}
+
+.bt-metric-label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.bt-metric-value {
+    display: block;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.bt-metric-value.profit {
+    color: var(--color-red);
+}
+
+.bt-metric-value.loss {
+    color: var(--color-green);
+}
+
+.bt-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.bt-trades-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.bt-equity-chart-wrap {
+    margin-bottom: 18px;
+}
+
+.bt-equity-chart {
+    width: 100%;
+    height: 280px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+}
+
+.bt-trades-wrap {
+    margin-bottom: 12px;
+}
+
+.bt-trades-table {
+    max-height: 360px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+}
+
+.bt-trades-table::-webkit-scrollbar {
+    width: 6px;
+}
+
+.bt-trades-table::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.bt-trades-table::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.bt-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.bt-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.bt-table th {
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-weight: 600;
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.bt-table td {
+    padding: 7px 10px;
+    color: var(--text-secondary);
+    border-bottom: 1px solid rgba(48, 54, 61, 0.4);
+    white-space: nowrap;
+}
+
+.bt-table tr:hover td {
+    background: var(--bg-hover);
+}
+
+.bt-table .profit {
+    color: var(--color-red);
+    font-weight: 600;
+}
+
+.bt-table .loss {
+    color: var(--color-green);
+    font-weight: 600;
+}
+
+.bt-td-symbol {
+    font-weight: 700;
+    color: var(--text-primary) !important;
+}
+
+@media (max-width: 1024px) {
+    .bt-metrics-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+    .backtest-controls {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 640px) {
+    .bt-metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .bt-equity-chart {
+        height: 220px;
     }
 }

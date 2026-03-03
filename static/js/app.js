@@ -30,6 +30,19 @@ const PickState = {
 
 let poolChartInstance = null;
 
+// 数字货币页面状态
+const CryptoState = {
+    activeTab: 'signals',
+    signals: [],
+    positions: [],
+    trades: [],
+    selectedSymbol: null,
+    pollTimer: null,
+    scanning: false,
+};
+
+let cryptoChartInstance = null;
+
 document.addEventListener('DOMContentLoaded', () => {
     initNav();
     initUpload();
@@ -38,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initReportBtn();
     restoreFromDB();
     initStockPick();
+    initCrypto();
 });
 
 // ============================
@@ -59,6 +73,10 @@ function initNav() {
             if (targetPage === 'stock-pick') {
                 loadPoolStocks();
                 loadIndexInfo();
+            }
+            if (targetPage === 'crypto') {
+                loadCryptoConfig();
+                loadCryptoBotStatus();
             }
 
             setTimeout(() => {
@@ -1251,4 +1269,764 @@ async function clearPool() {
         ph.style.display = 'flex';
         ph.innerHTML = '<p>从左侧交易池选择一只股票<br>查看 K 线走势</p>';
     } catch (_) {}
+}
+
+// ============================
+// 数字货币页面
+// ============================
+
+let btEquityChartInstance = null;
+
+function initCrypto() {
+    document.getElementById('btn-save-crypto-config').addEventListener('click', saveCryptoConfig);
+    document.getElementById('btn-start-bot').addEventListener('click', startBot);
+    document.getElementById('btn-stop-bot').addEventListener('click', stopBot);
+    document.getElementById('btn-manual-scan').addEventListener('click', manualScan);
+    document.getElementById('btn-run-backtest').addEventListener('click', runBacktest);
+
+    document.querySelectorAll('.crypto-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const t = tab.dataset.tab;
+            if (t === CryptoState.activeTab) return;
+            CryptoState.activeTab = t;
+            document.querySelectorAll('.crypto-tab').forEach(el => el.classList.remove('active'));
+            tab.classList.add('active');
+            renderCryptoList();
+        });
+    });
+}
+
+async function loadCryptoConfig() {
+    try {
+        const resp = await fetch('/api/crypto/config');
+        const data = await resp.json();
+        if (data.success && data.config) {
+            const cfg = data.config;
+            const statusEl = document.getElementById('crypto-config-status');
+            if (cfg.api_key) {
+                statusEl.textContent = `已配置 (****${cfg.api_key.slice(-4)})`;
+                statusEl.className = 'config-status ok';
+            }
+            if (cfg.params) {
+                _applyCryptoParams(cfg.params);
+            }
+        }
+    } catch (_) {}
+}
+
+function _applyCryptoParams(params) {
+    const mapping = {
+        'mode': 'crypto-mode',
+        'drop_pct': 'crypto-drop-pct',
+        'stop_loss_pct': 'crypto-stop-loss',
+        'take_profit_1_pct': 'crypto-tp1',
+        'take_profit_2_pct': 'crypto-tp2',
+        'max_position_pct': 'crypto-max-pos-pct',
+        'max_positions': 'crypto-max-positions',
+    };
+    for (const [key, elId] of Object.entries(mapping)) {
+        if (params[key] != null) {
+            const el = document.getElementById(elId);
+            if (el) el.value = String(params[key]);
+        }
+    }
+}
+
+function _gatherCryptoParams() {
+    return {
+        mode: document.getElementById('crypto-mode').value,
+        drop_pct: parseInt(document.getElementById('crypto-drop-pct').value),
+        stop_loss_pct: parseInt(document.getElementById('crypto-stop-loss').value),
+        take_profit_1_pct: parseInt(document.getElementById('crypto-tp1').value),
+        take_profit_2_pct: parseInt(document.getElementById('crypto-tp2').value),
+        max_position_pct: parseInt(document.getElementById('crypto-max-pos-pct').value),
+        max_positions: parseInt(document.getElementById('crypto-max-positions').value),
+    };
+}
+
+async function saveCryptoConfig() {
+    const apiKey = document.getElementById('crypto-api-key').value.trim();
+    const apiSecret = document.getElementById('crypto-api-secret').value.trim();
+    const statusEl = document.getElementById('crypto-config-status');
+
+    if (!apiKey || !apiSecret) {
+        statusEl.textContent = '请输入 API Key 和 Secret';
+        statusEl.className = 'config-status error';
+        return;
+    }
+
+    statusEl.textContent = '保存中...';
+    statusEl.className = 'config-status';
+
+    try {
+        const resp = await fetch('/api/crypto/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                api_key: apiKey,
+                api_secret: apiSecret,
+                params: _gatherCryptoParams(),
+            }),
+        });
+        const data = await resp.json();
+        if (data.success) {
+            let msg = '配置已保存';
+            if (data.connected && data.auth_ok) msg += ' | 连接成功';
+            else if (data.connected) msg += ' | 已连接但认证失败';
+            else msg += ' | 连接失败，请检查网络';
+            statusEl.textContent = msg;
+            statusEl.className = 'config-status ' + (data.auth_ok ? 'ok' : 'error');
+            document.getElementById('crypto-api-key').value = '';
+            document.getElementById('crypto-api-secret').value = '';
+        } else {
+            statusEl.textContent = data.message || '保存失败';
+            statusEl.className = 'config-status error';
+        }
+    } catch (err) {
+        statusEl.textContent = '请求失败: ' + err.message;
+        statusEl.className = 'config-status error';
+    }
+}
+
+async function startBot() {
+    const startBtn = document.getElementById('btn-start-bot');
+    const stopBtn = document.getElementById('btn-stop-bot');
+
+    const mode = document.getElementById('crypto-mode').value;
+    if (mode === 'live' && !confirm('确定启动实盘交易？将使用真实资金进行交易！')) return;
+
+    startBtn.disabled = true;
+    startBtn.textContent = '启动中...';
+
+    try {
+        const resp = await fetch('/api/crypto/bot/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ params: _gatherCryptoParams() }),
+        });
+        const data = await resp.json();
+        if (data.success) {
+            startBtn.disabled = true;
+            startBtn.textContent = '运行中';
+            stopBtn.disabled = false;
+            _setBotStatus(true);
+            startBotPolling();
+        } else {
+            alert(data.message || '启动失败');
+            startBtn.disabled = false;
+            startBtn.textContent = '启动机器人';
+        }
+    } catch (err) {
+        alert('请求失败: ' + err.message);
+        startBtn.disabled = false;
+        startBtn.textContent = '启动机器人';
+    }
+}
+
+async function stopBot() {
+    try {
+        await fetch('/api/crypto/bot/stop', { method: 'POST' });
+        document.getElementById('btn-start-bot').disabled = false;
+        document.getElementById('btn-start-bot').textContent = '启动机器人';
+        document.getElementById('btn-stop-bot').disabled = true;
+        _setBotStatus(false);
+        stopBotPolling();
+    } catch (_) {}
+}
+
+async function manualScan() {
+    const btn = document.getElementById('btn-manual-scan');
+    if (CryptoState.scanning) return;
+    CryptoState.scanning = true;
+    btn.disabled = true;
+    btn.textContent = '扫描中...';
+
+    try {
+        const resp = await fetch('/api/crypto/bot/scan', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            CryptoState.signals = data.signals || [];
+            CryptoState.activeTab = 'signals';
+            document.querySelectorAll('.crypto-tab').forEach(el => {
+                el.classList.toggle('active', el.dataset.tab === 'signals');
+            });
+            renderCryptoList();
+        } else {
+            alert(data.message || '扫描失败');
+        }
+    } catch (err) {
+        alert('请求失败: ' + err.message);
+    }
+
+    CryptoState.scanning = false;
+    btn.disabled = false;
+    btn.textContent = '手动扫描';
+}
+
+function startBotPolling() {
+    stopBotPolling();
+    CryptoState.pollTimer = setInterval(loadCryptoBotStatus, 3000);
+}
+
+function stopBotPolling() {
+    if (CryptoState.pollTimer) {
+        clearInterval(CryptoState.pollTimer);
+        CryptoState.pollTimer = null;
+    }
+}
+
+async function loadCryptoBotStatus() {
+    try {
+        const resp = await fetch('/api/crypto/bot/status');
+        const data = await resp.json();
+        if (!data.success) return;
+
+        CryptoState.signals = data.signals || [];
+        CryptoState.positions = data.positions || [];
+
+        _updateDashboard(data);
+
+        if (data.running) {
+            document.getElementById('btn-start-bot').disabled = true;
+            document.getElementById('btn-start-bot').textContent = '运行中';
+            document.getElementById('btn-stop-bot').disabled = false;
+            _setBotStatus(true);
+            if (!CryptoState.pollTimer) startBotPolling();
+        } else {
+            document.getElementById('btn-start-bot').disabled = false;
+            document.getElementById('btn-start-bot').textContent = '启动机器人';
+            document.getElementById('btn-stop-bot').disabled = true;
+            _setBotStatus(false);
+        }
+
+        renderCryptoList();
+
+        // 加载交易统计
+        const trResp = await fetch('/api/crypto/trades?limit=50');
+        const trData = await trResp.json();
+        if (trData.success) {
+            CryptoState.trades = trData.trades || [];
+            if (trData.stats) {
+                setText('dash-win-rate', trData.stats.win_rate + '%');
+                const pnlEl = document.getElementById('dash-total-pnl');
+                pnlEl.textContent = (trData.stats.total_pnl >= 0 ? '+' : '') + trData.stats.total_pnl.toFixed(2);
+                pnlEl.className = 'dash-value ' + (trData.stats.total_pnl >= 0 ? 'profit' : 'loss');
+            }
+            if (CryptoState.activeTab === 'trades') renderCryptoList();
+        }
+    } catch (_) {}
+}
+
+function _updateDashboard(data) {
+    setText('dash-balance', data.balance != null ? data.balance.toFixed(2) : '--');
+    setText('dash-pos-count', `${data.position_count} / ${data.max_positions}`);
+
+    const unrEl = document.getElementById('dash-unrealized');
+    if (data.total_unrealized_pnl != null) {
+        const v = data.total_unrealized_pnl;
+        unrEl.textContent = (v >= 0 ? '+' : '') + v.toFixed(2);
+        unrEl.className = 'dash-value ' + (v >= 0 ? 'profit' : 'loss');
+    }
+
+    setText('dash-last-scan', data.last_scan_time || '--');
+
+    const modeEl = document.getElementById('crypto-mode');
+    if (data.mode && modeEl) {
+        const indicator = document.getElementById('bot-status-text');
+        if (indicator) {
+            const modeLabel = data.mode === 'paper' ? '模拟盘' : '实盘';
+            indicator.textContent = data.running ? `运行中 (${modeLabel})` : '未启动';
+        }
+    }
+}
+
+function _setBotStatus(running) {
+    const dot = document.getElementById('bot-status-indicator');
+    const text = document.getElementById('bot-status-text');
+    if (running) {
+        dot.classList.add('active');
+        if (!text.textContent.includes('运行中')) text.textContent = '运行中';
+    } else {
+        dot.classList.remove('active');
+        text.textContent = '未启动';
+    }
+}
+
+function renderCryptoList() {
+    const container = document.getElementById('crypto-list-container');
+    const tab = CryptoState.activeTab;
+
+    if (tab === 'signals') {
+        _renderSignalList(container, CryptoState.signals);
+    } else if (tab === 'positions') {
+        _renderPositionList(container, CryptoState.positions);
+    } else {
+        _renderTradeList(container, CryptoState.trades);
+    }
+}
+
+function _renderSignalList(container, signals) {
+    if (!signals || signals.length === 0) {
+        container.innerHTML = '<div class="crypto-empty"><p>暂无信号</p><p class="crypto-empty-hint">点击「手动扫描」扫描TOP20币种</p></div>';
+        return;
+    }
+    container.innerHTML = '';
+    signals.forEach(sig => {
+        const card = document.createElement('div');
+        card.className = 'crypto-card signal-card';
+        if (CryptoState.selectedSymbol === sig.symbol) card.classList.add('active');
+
+        let tagsHtml = '';
+        (sig.tags || []).forEach(tag => {
+            let cls = 'signal';
+            if (tag === '锤子线' || tag === '阳包阴' || tag === '早晨之星') cls = 'pattern';
+            if (tag.includes('MA') || tag === '金叉') cls = 'ma';
+            tagsHtml += `<span class="crypto-tag ${cls}">${escapeHtml(tag)}</span>`;
+        });
+
+        card.innerHTML = `
+            <div class="crypto-card-header">
+                <span class="crypto-card-symbol">${sig.symbol}</span>
+                <span class="crypto-card-score">${sig.score}分</span>
+            </div>
+            <div class="crypto-card-meta">
+                <span>价格 ${sig.current_price}</span>
+                <span>跌${sig.drop_pct}%</span>
+                <span>量比${sig.volume_ratio}</span>
+            </div>
+            <div class="crypto-card-tags">${tagsHtml}</div>
+        `;
+        card.addEventListener('click', () => selectCryptoSymbol(sig.symbol, card));
+        container.appendChild(card);
+    });
+}
+
+function _renderPositionList(container, positions) {
+    if (!positions || positions.length === 0) {
+        container.innerHTML = '<div class="crypto-empty"><p>暂无持仓</p></div>';
+        return;
+    }
+    container.innerHTML = '';
+    positions.forEach(pos => {
+        const card = document.createElement('div');
+        card.className = 'crypto-card position-card';
+        if (CryptoState.selectedSymbol === pos.symbol) card.classList.add('active');
+
+        const pnlCls = pos.pnl_pct >= 0 ? 'profit' : 'loss';
+        const pnlSign = pos.pnl_pct >= 0 ? '+' : '';
+        const tp1Tag = pos.tp1_hit ? '<span class="crypto-tag tp1">已止盈1</span>' : '';
+
+        card.innerHTML = `
+            <div class="crypto-card-header">
+                <span class="crypto-card-symbol">${pos.symbol}</span>
+                <span class="crypto-card-pnl ${pnlCls}">${pnlSign}${pos.unrealized_pnl.toFixed(2)} (${pnlSign}${pos.pnl_pct}%)</span>
+            </div>
+            <div class="crypto-card-meta">
+                <span>买入 ${pos.entry_price}</span>
+                <span>现价 ${pos.current_price}</span>
+                <span>数量 ${pos.quantity.toFixed(6)}</span>
+            </div>
+            <div class="crypto-card-tags">${tp1Tag}</div>
+            <div class="crypto-card-time">${pos.entry_time}</div>
+        `;
+        card.addEventListener('click', () => selectCryptoSymbol(pos.symbol, card));
+        container.appendChild(card);
+    });
+}
+
+function _renderTradeList(container, trades) {
+    if (!trades || trades.length === 0) {
+        container.innerHTML = '<div class="crypto-empty"><p>暂无交易记录</p></div>';
+        return;
+    }
+    container.innerHTML = '';
+    trades.forEach(tr => {
+        const card = document.createElement('div');
+        card.className = 'crypto-card trade-record-card';
+
+        const isBuy = tr.side === 'BUY';
+        const sideCls = isBuy ? 'buy' : 'sell';
+        const sideLabel = isBuy ? '买入' : '卖出';
+        const pnlHtml = !isBuy && tr.pnl !== 0
+            ? `<span class="crypto-card-pnl ${tr.pnl >= 0 ? 'profit' : 'loss'}">${tr.pnl >= 0 ? '+' : ''}${tr.pnl.toFixed(2)}</span>`
+            : '';
+        const statusTag = tr.status === 'paper' ? '<span class="crypto-tag paper">模拟</span>' : '';
+
+        card.innerHTML = `
+            <div class="crypto-card-header">
+                <span class="crypto-card-symbol">${tr.symbol}</span>
+                <span class="crypto-side ${sideCls}">${sideLabel}</span>
+                ${pnlHtml}
+            </div>
+            <div class="crypto-card-meta">
+                <span>价格 ${tr.price}</span>
+                <span>数量 ${tr.quantity.toFixed(6)}</span>
+                <span>金额 ${tr.amount.toFixed(2)}</span>
+            </div>
+            <div class="crypto-card-tags">${statusTag}</div>
+            <div class="crypto-card-time">${tr.trade_time}</div>
+        `;
+        card.addEventListener('click', () => selectCryptoSymbol(tr.symbol, card));
+        container.appendChild(card);
+    });
+}
+
+async function selectCryptoSymbol(symbol, cardEl) {
+    CryptoState.selectedSymbol = symbol;
+
+    document.querySelectorAll('.crypto-card.active').forEach(el => el.classList.remove('active'));
+    if (cardEl) cardEl.classList.add('active');
+
+    const info = document.getElementById('crypto-chart-info');
+    info.style.display = 'flex';
+    document.getElementById('crypto-chart-symbol').textContent = symbol;
+    document.getElementById('crypto-chart-meta').textContent = '';
+
+    _showCryptoChartLoading(true);
+
+    try {
+        const resp = await fetch(`/api/crypto/kline?symbol=${symbol}&interval=4h&limit=200`);
+        const data = await resp.json();
+        _showCryptoChartLoading(false);
+
+        if (data.success) {
+            renderCryptoKlineChart(data);
+        } else {
+            _showCryptoChartError(data.message || '获取K线失败');
+        }
+    } catch (err) {
+        _showCryptoChartLoading(false);
+        _showCryptoChartError('请求失败: ' + err.message);
+    }
+}
+
+function renderCryptoKlineChart(data) {
+    const container = document.getElementById('crypto-kline-chart');
+    if (cryptoChartInstance) cryptoChartInstance.dispose();
+    cryptoChartInstance = echarts.init(container, 'dark');
+
+    window.addEventListener('resize', () => {
+        if (cryptoChartInstance) cryptoChartInstance.resize();
+    });
+
+    const { dates, ohlcv, volumes, ma7, ma25, ma99 } = data;
+    const volumeColors = ohlcv.map(item => item[1] >= item[0] ? 1 : -1);
+    const zoomStart = Math.max(0, 100 - (80 / Math.max(dates.length, 1)) * 100);
+
+    const option = {
+        backgroundColor: 'transparent',
+        animation: false,
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'cross', crossStyle: { color: '#6e7681' } },
+            backgroundColor: 'rgba(22, 27, 34, 0.95)',
+            borderColor: '#30363d',
+            textStyle: { color: '#e6edf3', fontSize: 12 },
+            formatter: function (params) {
+                if (!params || params.length === 0) return '';
+                const date = params[0].axisValue;
+                let html = `<div style="font-weight:600;margin-bottom:6px;">${date}</div>`;
+                params.forEach(p => {
+                    if (p.seriesName === 'K线' && p.data) {
+                        const d = p.data;
+                        const color = d[1] >= d[0] ? '#f85149' : '#3fb950';
+                        html += `<div style="color:${color}">O: ${d[0]} C: ${d[1]}<br/>L: ${d[2]} H: ${d[3]}</div>`;
+                    } else if (p.seriesName === '成交量') {
+                        html += `<div>Vol: ${Number(p.data).toLocaleString()}</div>`;
+                    } else if (p.seriesName && p.seriesName.startsWith('MA') && p.data != null) {
+                        html += `<div><span style="color:${p.color}">${p.seriesName}: ${p.data}</span></div>`;
+                    }
+                });
+                return html;
+            },
+        },
+        axisPointer: { link: [{ xAxisIndex: [0, 1] }] },
+        grid: [
+            { left: '8%', right: '3%', top: '5%', height: '55%' },
+            { left: '8%', right: '3%', top: '68%', height: '18%' },
+        ],
+        xAxis: [
+            {
+                type: 'category', data: dates, gridIndex: 0,
+                axisLine: { lineStyle: { color: '#30363d' } },
+                axisLabel: { color: '#8b949e', fontSize: 10 },
+                splitLine: { show: false }, boundaryGap: true,
+                axisPointer: { show: true },
+            },
+            {
+                type: 'category', data: dates, gridIndex: 1,
+                axisLine: { lineStyle: { color: '#30363d' } },
+                axisLabel: { show: false },
+                splitLine: { show: false }, boundaryGap: true,
+                axisPointer: { show: true },
+            },
+        ],
+        yAxis: [
+            {
+                type: 'value', gridIndex: 0, scale: true,
+                splitArea: { show: false },
+                axisLine: { lineStyle: { color: '#30363d' } },
+                axisLabel: { color: '#8b949e', fontSize: 10 },
+                splitLine: { lineStyle: { color: '#21262d' } },
+            },
+            {
+                type: 'value', gridIndex: 1, scale: true, splitNumber: 2,
+                axisLine: { lineStyle: { color: '#30363d' } },
+                axisLabel: { color: '#8b949e', fontSize: 10 },
+                splitLine: { lineStyle: { color: '#21262d' } },
+            },
+        ],
+        dataZoom: [
+            { type: 'inside', xAxisIndex: [0, 1], start: zoomStart, end: 100 },
+            {
+                type: 'slider', xAxisIndex: [0, 1], start: zoomStart, end: 100,
+                top: '90%', height: 24,
+                borderColor: '#30363d',
+                fillerColor: 'rgba(88, 166, 255, 0.15)',
+                handleStyle: { color: '#58a6ff' },
+                textStyle: { color: '#8b949e' },
+            },
+        ],
+        series: [
+            {
+                name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0,
+                data: ohlcv,
+                itemStyle: {
+                    color: '#f85149', color0: '#3fb950',
+                    borderColor: '#f85149', borderColor0: '#3fb950',
+                },
+            },
+            {
+                name: 'MA7', type: 'line', xAxisIndex: 0, yAxisIndex: 0,
+                data: ma7, smooth: true, showSymbol: false,
+                lineStyle: { width: 1, color: '#d29922' },
+            },
+            {
+                name: 'MA25', type: 'line', xAxisIndex: 0, yAxisIndex: 0,
+                data: ma25, smooth: true, showSymbol: false,
+                lineStyle: { width: 1, color: '#58a6ff' },
+            },
+            {
+                name: 'MA99', type: 'line', xAxisIndex: 0, yAxisIndex: 0,
+                data: ma99, smooth: true, showSymbol: false,
+                lineStyle: { width: 1, color: '#bc8cff' },
+            },
+            {
+                name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1,
+                data: volumes,
+                itemStyle: {
+                    color: function (params) {
+                        const idx = params.dataIndex;
+                        return idx < volumeColors.length && volumeColors[idx] > 0
+                            ? '#f85149' : '#3fb950';
+                    },
+                },
+            },
+        ],
+    };
+
+    cryptoChartInstance.setOption(option, true);
+}
+
+function _showCryptoChartLoading(show) {
+    const loading = document.getElementById('crypto-chart-loading');
+    const placeholder = document.getElementById('crypto-chart-placeholder');
+    const chartEl = document.getElementById('crypto-kline-chart');
+    if (show) {
+        loading.style.display = 'flex';
+        placeholder.style.display = 'none';
+        chartEl.style.display = 'none';
+    } else {
+        loading.style.display = 'none';
+        chartEl.style.display = 'block';
+    }
+}
+
+function _showCryptoChartError(message) {
+    const placeholder = document.getElementById('crypto-chart-placeholder');
+    const chartEl = document.getElementById('crypto-kline-chart');
+    chartEl.style.display = 'none';
+    placeholder.style.display = 'flex';
+    placeholder.innerHTML = `<p style="color:#f85149;">${escapeHtml(message)}</p>`;
+}
+
+// ============================
+// 回测功能
+// ============================
+
+let _btPollTimer = null;
+
+async function runBacktest() {
+    const btn = document.getElementById('btn-run-backtest');
+    btn.disabled = true;
+    btn.textContent = '回测中...';
+
+    const progressEl = document.getElementById('bt-progress');
+    progressEl.style.display = 'flex';
+    document.getElementById('bt-results').style.display = 'none';
+
+    const params = {
+        days: parseInt(document.getElementById('bt-days').value),
+        initial_capital: parseInt(document.getElementById('bt-capital').value),
+        interval: document.getElementById('bt-interval').value,
+        drop_pct: parseInt(document.getElementById('crypto-drop-pct').value),
+        stop_loss_pct: parseInt(document.getElementById('crypto-stop-loss').value),
+        take_profit_1_pct: parseInt(document.getElementById('crypto-tp1').value),
+        take_profit_2_pct: parseInt(document.getElementById('crypto-tp2').value),
+        max_position_pct: parseInt(document.getElementById('crypto-max-pos-pct').value),
+        max_positions: parseInt(document.getElementById('crypto-max-positions').value),
+    };
+
+    try {
+        await fetch('/api/crypto/backtest/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
+        _pollBacktestStatus();
+    } catch (err) {
+        document.getElementById('bt-progress-text').textContent = '启动失败: ' + err.message;
+        btn.disabled = false;
+        btn.textContent = '运行回测';
+    }
+}
+
+function _pollBacktestStatus() {
+    if (_btPollTimer) clearTimeout(_btPollTimer);
+
+    _btPollTimer = setTimeout(async () => {
+        try {
+            const resp = await fetch('/api/crypto/backtest/status');
+            const data = await resp.json();
+
+            document.getElementById('bt-progress-fill').style.width = data.progress + '%';
+            document.getElementById('bt-progress-text').textContent = data.message;
+
+            if (data.status === 'done') {
+                _resetBtBtn();
+                _renderBacktestResults(data);
+                return;
+            }
+            if (data.status === 'error') {
+                _resetBtBtn();
+                return;
+            }
+            _pollBacktestStatus();
+        } catch (err) {
+            document.getElementById('bt-progress-text').textContent = '轮询失败: ' + err.message;
+            _pollBacktestStatus();
+        }
+    }, 2000);
+}
+
+function _resetBtBtn() {
+    const btn = document.getElementById('btn-run-backtest');
+    btn.disabled = false;
+    btn.textContent = '运行回测';
+}
+
+function _renderBacktestResults(data) {
+    const results = document.getElementById('bt-results');
+    results.style.display = 'block';
+
+    const s = data.summary || {};
+
+    const retEl = document.getElementById('bt-total-return');
+    retEl.textContent = (s.total_return_pct >= 0 ? '+' : '') + s.total_return_pct + '%';
+    retEl.className = 'bt-metric-value ' + (s.total_return_pct >= 0 ? 'profit' : 'loss');
+
+    const annEl = document.getElementById('bt-annual-return');
+    annEl.textContent = (s.annualized_return_pct >= 0 ? '+' : '') + s.annualized_return_pct + '%';
+    annEl.className = 'bt-metric-value ' + (s.annualized_return_pct >= 0 ? 'profit' : 'loss');
+
+    setText('bt-win-rate', s.win_rate + '%');
+    setText('bt-max-dd', '-' + s.max_drawdown_pct + '%');
+    setText('bt-profit-factor', s.profit_factor);
+    setText('bt-sharpe', s.sharpe_ratio);
+    setText('bt-trade-count', `${s.total_trades} (${s.wins}W/${s.losses}L)`);
+    setText('bt-final-bal', s.final_balance?.toLocaleString() + ' USDT');
+
+    _renderEquityCurve(data.equity || []);
+    _renderBacktestTrades(data.trades || []);
+
+    results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function _renderEquityCurve(equity) {
+    const container = document.getElementById('bt-equity-chart');
+    if (btEquityChartInstance) btEquityChartInstance.dispose();
+    btEquityChartInstance = echarts.init(container, 'dark');
+    window.addEventListener('resize', () => { if (btEquityChartInstance) btEquityChartInstance.resize(); });
+
+    if (!equity || equity.length === 0) {
+        container.innerHTML = '<p style="color:#6e7681;text-align:center;padding:40px;">无资金曲线数据</p>';
+        return;
+    }
+
+    const dates = equity.map(e => e.date);
+    const values = equity.map(e => e.equity);
+    const initial = values[0] || 10000;
+
+    btEquityChartInstance.setOption({
+        backgroundColor: 'transparent',
+        tooltip: {
+            trigger: 'axis',
+            formatter: p => `${p[0].axisValue}<br/>资金: ${Number(p[0].value).toLocaleString()} USDT`,
+        },
+        grid: { left: '10%', right: '4%', top: '8%', bottom: '12%' },
+        xAxis: {
+            type: 'category', data: dates,
+            axisLabel: { color: '#8b949e', fontSize: 10 },
+            axisLine: { lineStyle: { color: '#30363d' } },
+        },
+        yAxis: {
+            type: 'value', scale: true,
+            axisLabel: { color: '#8b949e', fontSize: 10 },
+            splitLine: { lineStyle: { color: '#21262d' } },
+        },
+        series: [{
+            type: 'line', data: values, smooth: true, showSymbol: false,
+            lineStyle: { width: 2, color: '#58a6ff' },
+            areaStyle: { color: 'rgba(88, 166, 255, 0.08)' },
+            markLine: {
+                silent: true, symbol: 'none',
+                data: [{ yAxis: initial, lineStyle: { color: '#6e7681', type: 'dashed', width: 1 } }],
+                label: { formatter: '初始资金', color: '#6e7681', fontSize: 10 },
+            },
+        }],
+    });
+}
+
+function _renderBacktestTrades(trades) {
+    const container = document.getElementById('bt-trades-table');
+    setText('bt-trades-count', `(${trades.length})`);
+
+    if (!trades || trades.length === 0) {
+        container.innerHTML = '<p style="color:#6e7681;text-align:center;padding:20px;">无交易记录</p>';
+        return;
+    }
+
+    let html = `<table class="bt-table">
+        <thead><tr>
+            <th>币种</th><th>入场时间</th><th>入场价</th>
+            <th>出场时间</th><th>出场价</th><th>盈亏</th><th>收益%</th><th>原因</th>
+        </tr></thead><tbody>`;
+
+    trades.forEach(t => {
+        const pnlCls = t.pnl >= 0 ? 'profit' : 'loss';
+        const pnlSign = t.pnl >= 0 ? '+' : '';
+        html += `<tr>
+            <td class="bt-td-symbol">${t.symbol}</td>
+            <td>${t.entry_time}</td>
+            <td>${t.entry_price}</td>
+            <td>${t.exit_time}</td>
+            <td>${t.exit_price}</td>
+            <td class="${pnlCls}">${pnlSign}${t.pnl.toFixed(2)}</td>
+            <td class="${pnlCls}">${pnlSign}${t.pnl_pct}%</td>
+            <td>${t.exit_reason}</td>
+        </tr>`;
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
 }

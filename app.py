@@ -11,6 +11,9 @@ from services.matcher import match_trades
 from services.stock_data import fetch_kline_data
 from services.analyzer import analyze_trading_style
 from services.screener import start_screening, get_screening_status, fetch_index_info
+from services.crypto_trader import get_bot
+from services.crypto_backtest import start_backtest, get_backtest_status
+from services.binance_client import BinanceClient
 from services import database as db
 
 # 配置日志
@@ -209,9 +212,214 @@ def clear_pool_api():
     return jsonify({'success': True})
 
 
+# ============================
+# 数字货币 API
+# ============================
+
+@app.route('/api/crypto/config', methods=['GET'])
+def get_crypto_config():
+    """获取加密货币配置（密钥脱敏）"""
+    cfg = db.get_crypto_config()
+    if not cfg:
+        return jsonify({'success': True, 'config': None})
+    masked_key = cfg['api_key'][-4:].rjust(len(cfg['api_key']), '*') if cfg['api_key'] else ''
+    return jsonify({
+        'success': True,
+        'config': {
+            'api_key': masked_key,
+            'has_secret': bool(cfg['api_secret']),
+            'is_running': cfg['is_running'],
+            'params': cfg['config'],
+            'updated_at': cfg['updated_at'],
+        },
+    })
+
+
+@app.route('/api/crypto/config', methods=['POST'])
+def save_crypto_config():
+    """保存 API 密钥和策略参数"""
+    data = request.get_json(silent=True) or {}
+    api_key = data.get('api_key', '').strip()
+    api_secret = data.get('api_secret', '').strip()
+    params = data.get('params', {})
+
+    if not api_key or not api_secret:
+        return jsonify({'success': False, 'message': '请输入 API Key 和 Secret'}), 400
+
+    db.save_crypto_config(api_key, api_secret, params)
+
+    bot = get_bot()
+    bot.configure(api_key, api_secret, params)
+
+    connected = bot.client.test_connectivity() if bot.client else False
+    auth_ok = bot.client.test_auth() if connected and bot.client else False
+
+    return jsonify({
+        'success': True,
+        'connected': connected,
+        'auth_ok': auth_ok,
+    })
+
+
+@app.route('/api/crypto/bot/start', methods=['POST'])
+def start_crypto_bot():
+    """启动交易机器人"""
+    data = request.get_json(silent=True) or {}
+    bot = get_bot()
+
+    if data.get('params'):
+        cfg = db.get_crypto_config()
+        if cfg:
+            bot.configure(cfg['api_key'], cfg['api_secret'], data['params'])
+            db.save_crypto_config(cfg['api_key'], cfg['api_secret'], data['params'])
+
+    ok = bot.start()
+    if not ok:
+        return jsonify({'success': False, 'message': bot.error_msg}), 400
+    return jsonify({'success': True})
+
+
+@app.route('/api/crypto/bot/stop', methods=['POST'])
+def stop_crypto_bot():
+    """停止交易机器人"""
+    bot = get_bot()
+    bot.stop()
+    return jsonify({'success': True})
+
+
+@app.route('/api/crypto/bot/status')
+def crypto_bot_status():
+    """获取机器人状态"""
+    bot = get_bot()
+    status = bot.get_status()
+    return jsonify({'success': True, **status})
+
+
+@app.route('/api/crypto/bot/scan', methods=['POST'])
+def crypto_manual_scan():
+    """手动扫描信号"""
+    bot = get_bot()
+    if not bot.client:
+        return jsonify({'success': False, 'message': '请先配置 API Key'}), 400
+    signals = bot.manual_scan()
+    return jsonify({'success': True, 'signals': signals})
+
+
+@app.route('/api/crypto/trades')
+def get_crypto_trades():
+    """获取加密货币交易记录"""
+    limit = request.args.get('limit', 100, type=int)
+    symbol = request.args.get('symbol', '').strip() or None
+    trades = db.get_crypto_trades(limit=limit, symbol=symbol)
+    stats = db.get_crypto_trade_stats()
+    return jsonify({'success': True, 'trades': trades, 'stats': stats})
+
+
+@app.route('/api/crypto/kline')
+def get_crypto_kline():
+    """获取加密货币K线数据"""
+    symbol = request.args.get('symbol', '').strip()
+    interval = request.args.get('interval', '4h').strip()
+    limit = request.args.get('limit', 200, type=int)
+
+    if not symbol:
+        return jsonify({'success': False, 'message': '缺少 symbol 参数'}), 400
+
+    try:
+        client = BinanceClient()
+        raw = client.get_klines(symbol, interval, limit)
+        if not raw:
+            return jsonify({'success': False, 'message': '无K线数据'}), 404
+
+        dates = []
+        ohlcv = []
+        volumes = []
+        closes_arr = []
+
+        for k in raw:
+            from datetime import datetime as dt
+            ts = int(k[0]) / 1000
+            date_str = dt.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M')
+            o, h, l, c, v = float(k[1]), float(k[2]), float(k[3]), float(k[4]), float(k[5])
+            dates.append(date_str)
+            ohlcv.append([o, c, l, h])
+            volumes.append(v)
+            closes_arr.append(c)
+
+        import pandas as pd
+        s = pd.Series(closes_arr)
+        ma7 = s.rolling(7).mean().round(4).tolist()
+        ma25 = s.rolling(25).mean().round(4).tolist()
+        ma99 = s.rolling(99).mean().round(4).tolist()
+
+        ma7 = [None if pd.isna(v) else v for v in ma7]
+        ma25 = [None if pd.isna(v) else v for v in ma25]
+        ma99 = [None if pd.isna(v) else v for v in ma99]
+
+        return jsonify({
+            'success': True,
+            'symbol': symbol,
+            'dates': dates,
+            'ohlcv': ohlcv,
+            'volumes': volumes,
+            'ma7': ma7,
+            'ma25': ma25,
+            'ma99': ma99,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# ============================
+# 回测 API
+# ============================
+
+@app.route('/api/crypto/backtest/run', methods=['POST'])
+def run_backtest_api():
+    """启动回测任务"""
+    params = request.get_json(silent=True) or {}
+    run_id = start_backtest(params)
+    return jsonify({'success': True, 'run_id': run_id})
+
+
+@app.route('/api/crypto/backtest/status')
+def backtest_status_api():
+    """回测进度和结果"""
+    status = get_backtest_status()
+    return jsonify({
+        'success': True,
+        'status': status['status'],
+        'progress': status['progress'],
+        'total': status['total'],
+        'message': status['message'],
+        'summary': status['summary'] if status['status'] == 'done' else {},
+        'equity': status['equity'] if status['status'] == 'done' else [],
+        'trades': status['trades'] if status['status'] == 'done' else [],
+    })
+
+
+@app.route('/api/crypto/backtest/history')
+def backtest_history_api():
+    """历史回测记录"""
+    limit = request.args.get('limit', 20, type=int)
+    runs = db.get_backtest_history(limit=limit)
+    return jsonify({'success': True, 'runs': runs})
+
+
+@app.route('/api/crypto/backtest/<run_id>')
+def backtest_detail_api(run_id):
+    """获取某次回测的详细结果"""
+    run = db.get_backtest_run(run_id)
+    if not run:
+        return jsonify({'success': False, 'message': '回测记录不存在'}), 404
+    trades = db.get_backtest_trades(run_id)
+    run['trades'] = trades
+    return jsonify({'success': True, 'run': run})
+
+
 if __name__ == '__main__':
     print("=" * 50)
-    print("  A 股盈利交易技术分析系统")
+    print("  Tigger - A 股 & 数字货币交易分析系统")
     print("  访问地址: http://127.0.0.1:5000")
     print("=" * 50)
     app.run(debug=True, host='127.0.0.1', port=5000)
