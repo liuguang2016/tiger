@@ -1047,6 +1047,27 @@ body {
     background: rgba(139, 148, 158, 0.1);
 }
 
+.pool-tag.pattern {
+    color: var(--color-yellow);
+    background: rgba(210, 153, 34, 0.15);
+}
+
+.pool-tag.ma {
+    color: var(--color-blue);
+    background: rgba(88, 166, 255, 0.12);
+}
+
+.pool-tag.signal {
+    color: var(--color-purple);
+    background: rgba(188, 140, 255, 0.12);
+}
+
+.pool-tag.confidence {
+    color: var(--color-orange);
+    background: rgba(219, 109, 40, 0.12);
+    letter-spacing: 1px;
+}
+
 .pool-card-remove {
     position: absolute;
     top: 8px;

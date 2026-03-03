@@ -869,12 +869,21 @@ async function startScreening() {
 
     const dropPct = parseInt(document.getElementById('param-drop-pct').value);
     const volRatio = parseFloat(document.getElementById('param-vol-ratio').value);
+    const mvRange = document.getElementById('param-mv-range').value;
+    const minTurnover = parseFloat(document.getElementById('param-turnover').value);
+    const maFilter = document.getElementById('param-ma-filter').value;
 
     try {
         await fetch('/api/screener/run', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ drop_pct: dropPct, volume_ratio: volRatio }),
+            body: JSON.stringify({
+                drop_pct: dropPct,
+                volume_ratio: volRatio,
+                mv_range: mvRange,
+                min_turnover: minTurnover,
+                ma_filter: maFilter,
+            }),
         });
         pollScreenerStatus();
     } catch (err) {
@@ -970,6 +979,20 @@ function renderPoolList(stocks) {
         const changeCls = stock.change_pct >= 0 ? 'up' : 'down';
         const changeSign = stock.change_pct >= 0 ? '+' : '';
 
+        let extraTags = '';
+        const tags = stock.tags || [];
+        tags.forEach(tag => {
+            let cls = 'signal';
+            if (tag === '锤子线' || tag === '阳包阴' || tag === '早晨之星') cls = 'pattern';
+            if (tag === 'MA5拐头' || tag === '金叉' || tag === '均线密集') cls = 'ma';
+            extraTags += `<span class="pool-tag ${cls}">${escapeHtml(tag)}</span>`;
+        });
+
+        const confDots = stock.stab_confidence || 0;
+        const confHtml = confDots > 0
+            ? `<span class="pool-tag confidence">企稳${'★'.repeat(confDots)}${'☆'.repeat(3 - confDots)}</span>`
+            : '';
+
         card.innerHTML = `
             <div class="pool-card-header">
                 <div>
@@ -982,6 +1005,8 @@ function renderPoolList(stocks) {
                 <span class="pool-tag drop">跌${stock.drop_pct}%</span>
                 <span class="pool-tag vol">量比${stock.volume_ratio}</span>
                 <span class="pool-tag price">${stock.close_price} (${changeSign}${stock.change_pct}%)</span>
+                ${confHtml}
+                ${extraTags}
             </div>
             <button class="pool-card-remove" title="移除">&times;</button>
         `;

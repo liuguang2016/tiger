@@ -74,17 +74,21 @@ def init_db():
 
             -- 选股交易池表
             CREATE TABLE IF NOT EXISTS stock_pool (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                stock_code  TEXT NOT NULL,
-                stock_name  TEXT DEFAULT '',
-                add_date    TEXT NOT NULL DEFAULT (date('now','localtime')),
-                score       REAL DEFAULT 0,
-                drop_pct    REAL DEFAULT 0,
-                volume_ratio REAL DEFAULT 0,
-                close_price REAL DEFAULT 0,
-                change_pct  REAL DEFAULT 0,
-                reason      TEXT DEFAULT '',
-                status      TEXT DEFAULT 'active',
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                stock_code      TEXT NOT NULL,
+                stock_name      TEXT DEFAULT '',
+                add_date        TEXT NOT NULL DEFAULT (date('now','localtime')),
+                score           REAL DEFAULT 0,
+                drop_pct        REAL DEFAULT 0,
+                volume_ratio    REAL DEFAULT 0,
+                close_price     REAL DEFAULT 0,
+                change_pct      REAL DEFAULT 0,
+                reason          TEXT DEFAULT '',
+                tags            TEXT DEFAULT '[]',
+                pattern         TEXT DEFAULT '',
+                stab_confidence INTEGER DEFAULT 0,
+                market_env      TEXT DEFAULT '',
+                status          TEXT DEFAULT 'active',
                 UNIQUE(stock_code, add_date)
             );
 
@@ -96,9 +100,32 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_pool_date ON stock_pool(add_date);
         """)
         conn.commit()
+
+        # 迁移：为旧版 stock_pool 表添加新列
+        _migrate_pool_columns(conn)
+
         logger.info("数据库初始化完成: %s", DB_PATH)
     finally:
         conn.close()
+
+
+def _migrate_pool_columns(conn: sqlite3.Connection):
+    """为旧版 stock_pool 表添加 v2 新增列"""
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(stock_pool)").fetchall()}
+    new_cols = [
+        ("tags", "TEXT DEFAULT '[]'"),
+        ("pattern", "TEXT DEFAULT ''"),
+        ("stab_confidence", "INTEGER DEFAULT 0"),
+        ("market_env", "TEXT DEFAULT ''"),
+    ]
+    for col_name, col_def in new_cols:
+        if col_name not in existing:
+            try:
+                conn.execute(f"ALTER TABLE stock_pool ADD COLUMN {col_name} {col_def}")
+                logger.info("stock_pool 表新增列: %s", col_name)
+            except Exception:
+                pass
+    conn.commit()
 
 
 def clear_all():
@@ -297,13 +324,19 @@ def save_pool_stocks(stocks: List[Dict]):
         conn.executemany(
             """INSERT OR REPLACE INTO stock_pool
                (stock_code, stock_name, add_date, score, drop_pct,
-                volume_ratio, close_price, change_pct, reason, status)
-               VALUES (?, ?, date('now','localtime'), ?, ?, ?, ?, ?, ?, 'active')""",
+                volume_ratio, close_price, change_pct, reason,
+                tags, pattern, stab_confidence, market_env, status)
+               VALUES (?, ?, date('now','localtime'), ?, ?, ?, ?, ?, ?,
+                       ?, ?, ?, ?, 'active')""",
             [
                 (
                     s['stock_code'], s['stock_name'], s['score'],
                     s['drop_pct'], s['volume_ratio'], s.get('close', 0),
                     s.get('change_pct', 0), s.get('reason', ''),
+                    json.dumps(s.get('tags', []), ensure_ascii=False),
+                    s.get('pattern', ''),
+                    s.get('stab_confidence', 0),
+                    s.get('market_env', ''),
                 )
                 for s in stocks
             ]
@@ -354,6 +387,12 @@ def clear_pool():
 
 def _row_to_pool_dict(row: sqlite3.Row) -> Dict:
     """将数据库行转为交易池 dict"""
+    tags_raw = row['tags'] if 'tags' in row.keys() else '[]'
+    try:
+        tags = json.loads(tags_raw) if tags_raw else []
+    except (json.JSONDecodeError, TypeError):
+        tags = []
+
     return {
         'id': row['id'],
         'stock_code': row['stock_code'],
@@ -365,4 +404,8 @@ def _row_to_pool_dict(row: sqlite3.Row) -> Dict:
         'close_price': row['close_price'],
         'change_pct': row['change_pct'],
         'reason': row['reason'],
+        'tags': tags,
+        'pattern': row['pattern'] if 'pattern' in row.keys() else '',
+        'stab_confidence': row['stab_confidence'] if 'stab_confidence' in row.keys() else 0,
+        'market_env': row['market_env'] if 'market_env' in row.keys() else '',
     }

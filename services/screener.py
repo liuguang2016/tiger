@@ -1,7 +1,7 @@
 """
-弹簧反弹选股引擎
-基于价格行为学理论：大幅下跌后企稳 + 量能异变 + 大盘参考
-两阶段筛选：快速快照过滤 → 逐股K线详细分析
+弹簧反弹选股引擎 v2
+基于价格行为学理论：大幅下跌后企稳 + 量能异变 + 均线支撑 + K线形态 + 大盘参考
+两阶段筛选：快速快照过滤 → 逐股K线多维度分析 → 加权评分排序
 """
 
 import threading
@@ -9,8 +9,9 @@ import time
 import logging
 import uuid
 from datetime import datetime, timedelta
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
 
+import numpy as np
 import pandas as pd
 import requests
 
@@ -88,6 +89,9 @@ def _run_screening(task_id: str, params: dict):
     """后台线程执行筛选"""
     drop_pct_threshold = params.get("drop_pct", 25) / 100.0
     volume_ratio_threshold = params.get("volume_ratio", 1.5)
+    min_turnover = params.get("min_turnover", 1.0)
+    mv_range = params.get("mv_range", "all")
+    ma_filter = params.get("ma_filter", "none")
 
     try:
         # --- 获取大盘指数 ---
@@ -101,6 +105,7 @@ def _run_screening(task_id: str, params: dict):
             return
 
         index_kline = _fetch_index_kline()
+        market_score, market_env = _evaluate_market_env(index_kline)
 
         # --- Stage 1: 批量获取全A股快照 ---
         _update("message", "正在获取全A股实时数据（约5000+只）...")
@@ -111,19 +116,30 @@ def _run_screening(task_id: str, params: dict):
 
         logger.info("获取到 %d 只A股数据", len(snapshot_df))
 
-        # 排除 ST / 停牌 / 新股
+        # 增强过滤：排除 ST/退市/新股/注册制首日/停牌/涨跌停/微盘股
         candidates = snapshot_df[
-            (~snapshot_df["name"].str.contains("ST|退", na=False)) &
+            (~snapshot_df["name"].str.contains("ST|退|N|C", na=False)) &
             (snapshot_df["volume"] > 0) &
-            (snapshot_df["total_mv"] > 0)
+            (snapshot_df["turnover"] >= min_turnover) &
+            (snapshot_df["change_pct"] > -9.5) &
+            (snapshot_df["change_pct"] < 9.5) &
+            (snapshot_df["total_mv"] > 2e9)
         ].copy()
 
-        # 初步过滤：量比 > 阈值
+        # 市值范围过滤
+        if mv_range == "small":
+            candidates = candidates[(candidates["total_mv"] >= 2e9) & (candidates["total_mv"] <= 100e9)]
+        elif mv_range == "mid":
+            candidates = candidates[(candidates["total_mv"] > 100e9) & (candidates["total_mv"] <= 500e9)]
+        elif mv_range == "all":
+            candidates = candidates[candidates["total_mv"] <= 500e9]
+
+        # 量比过滤
         candidates = candidates[candidates["volume_ratio"] >= volume_ratio_threshold]
-        logger.info("初步过滤后 %d 只候选股", len(candidates))
+        logger.info("Stage 1 过滤后 %d 只候选股", len(candidates))
 
         if candidates.empty:
-            _update_multi(status="done", message="没有符合量比条件的股票", results=[])
+            _update_multi(status="done", message="没有符合初步条件的股票", results=[])
             return
 
         # --- Stage 2: 逐股详细分析 ---
@@ -133,7 +149,7 @@ def _run_screening(task_id: str, params: dict):
         results = []
         for i, (_, row) in enumerate(candidates.iterrows()):
             if _task_state.get("task_id") != task_id:
-                return  # 被新任务取代
+                return
 
             code = str(row["code"]).zfill(6)
             _update_multi(progress=i + 1, message=f"分析中 ({i+1}/{total}): {code} {row['name']}")
@@ -141,7 +157,8 @@ def _run_screening(task_id: str, params: dict):
             try:
                 result = _analyze_candidate(
                     code, row["name"], row,
-                    index_kline, drop_pct_threshold, volume_ratio_threshold,
+                    index_kline, market_score, market_env,
+                    drop_pct_threshold, ma_filter,
                 )
                 if result:
                     results.append(result)
@@ -172,7 +189,6 @@ def _run_screening(task_id: str, params: dict):
 def _fetch_all_stocks_snapshot() -> Optional[pd.DataFrame]:
     """
     调用东方财富行情接口，一次性获取全部 A 股实时数据
-    返回 DataFrame 包含: code, name, close, change_pct, volume, volume_ratio, total_mv
     """
     url = "https://push2.eastmoney.com/api/qt/clist/get"
     all_rows = []
@@ -232,7 +248,7 @@ def _fetch_all_stocks_snapshot() -> Optional[pd.DataFrame]:
 
 
 # ============================
-# Stage 2: 逐股详细分析
+# Stage 2: 逐股多维度分析
 # ============================
 
 def _analyze_candidate(
@@ -240,17 +256,20 @@ def _analyze_candidate(
     name: str,
     snapshot_row: pd.Series,
     index_kline: Optional[pd.DataFrame],
+    market_score: float,
+    market_env: str,
     drop_threshold: float,
-    vol_ratio_threshold: float,
+    ma_filter: str,
 ) -> Optional[Dict]:
     """
-    对单只股票进行详细技术分析
-    返回评分结果 dict 或 None（不符合条件）
+    对单只股票进行多维度技术分析
+    评分维度：跌幅深度(25) + 企稳质量(20) + 量能异变(20) + 均线位置(15) + K线形态(10) + 大盘环境(10)
     """
     kline_df = _fetch_stock_kline(code, days=90)
     if kline_df is None or len(kline_df) < 30:
         return None
 
+    opens = kline_df["open"].values
     closes = kline_df["close"].values
     highs = kline_df["high"].values
     lows = kline_df["low"].values
@@ -259,80 +278,274 @@ def _analyze_candidate(
     high_60d = max(highs[-60:]) if len(highs) >= 60 else max(highs)
     current_close = closes[-1]
 
-    # --- 条件1: 跌幅达标 ---
+    # ===== 硬性条件（不满足直接排除）=====
+
+    # 条件1: 跌幅达标
     drop_pct = (high_60d - current_close) / high_60d
     if drop_pct < drop_threshold:
         return None
 
-    # --- 条件2: 企稳信号（最近5日不再创新低）---
-    if len(lows) >= 25:
-        recent_5d_low = min(lows[-5:])
-        prev_20d_low = min(lows[-25:-5])
-        stabilized = recent_5d_low >= prev_20d_low * 0.99
-    else:
-        stabilized = True
-
+    # 条件2: 企稳信号（多维度确认）
+    stabilized, stab_confidence = _check_stabilized(closes, lows, highs, volumes)
     if not stabilized:
         return None
 
-    # --- 条件3: 量能异变（最近3日有放量）---
-    if len(volumes) >= 23:
-        avg_vol_20 = volumes[-23:-3].mean()
-        recent_3d_vols = volumes[-3:]
-        vol_spike = any(v > avg_vol_20 * 2 for v in recent_3d_vols) if avg_vol_20 > 0 else False
-    else:
-        vol_spike = snapshot_row.get("volume_ratio", 0) >= vol_ratio_threshold
-
+    # 条件3: 量能异变
+    vol_spike, vol_ratio_actual = _check_volume_spike(volumes, snapshot_row)
     if not vol_spike:
         return None
 
-    # --- 评分 ---
+    # 条件4: 均线过滤（可选）
+    ma_score, ma_tags = _check_ma_support(closes)
+    if ma_filter == "ma5_turn" and "MA5拐头" not in ma_tags:
+        return None
+    if ma_filter == "golden_cross" and "金叉" not in ma_tags:
+        return None
+
+    # ===== 多维度加权评分 =====
+
     score = 0.0
-
-    # 跌幅越大，弹性越大（25~50%映射到20~40分）
-    score += min(drop_pct * 80, 40)
-
-    # 量比越高，异动越强（1.5~5映射到10~30分）
-    vr = snapshot_row.get("volume_ratio", 0)
-    score += min(max((vr - 1) * 10, 0), 30)
-
-    # 企稳程度：最近5日振幅收窄加分
-    if len(highs) >= 5:
-        recent_range = (max(highs[-5:]) - min(lows[-5:])) / current_close
-        if recent_range < 0.10:
-            score += 15
-        elif recent_range < 0.15:
-            score += 10
-
-    # 大盘加分：大盘弱而个股不跌加分
-    if index_kline is not None and len(index_kline) > 0:
-        idx_change = index_kline["close"].iloc[-1] / index_kline["close"].iloc[-2] - 1 \
-            if len(index_kline) >= 2 else 0
-        stock_change = snapshot_row.get("change_pct", 0) / 100.0
-        if idx_change < 0 and stock_change > idx_change:
-            score += 15
-
-    score = round(min(score, 100), 1)
-
-    max_vol_3d = max(volumes[-3:]) if len(volumes) >= 3 else 0
-    avg_vol_20_val = volumes[-23:-3].mean() if len(volumes) >= 23 else 0
-    actual_vol_ratio = round(max_vol_3d / avg_vol_20_val, 2) if avg_vol_20_val > 0 else vr
-
     reasons = []
+    tags = []
+
+    # 维度1: 跌幅深度（满分25）
+    drop_score = min(drop_pct / 0.5 * 25, 25)
+    score += drop_score
     reasons.append(f"60日高点回落{drop_pct*100:.1f}%")
-    reasons.append(f"近期企稳不创新低")
-    reasons.append(f"量比{actual_vol_ratio}")
+
+    # 维度2: 企稳质量（满分20）
+    stab_score = min(stab_confidence * 6.7, 20)
+    score += stab_score
+    reasons.append(f"企稳置信{stab_confidence}/3")
+
+    # 维度3: 量能异变（满分20）
+    vr = snapshot_row.get("volume_ratio", 0)
+    vol_score = min(max((vol_ratio_actual - 1) * 8, 0), 20)
+    score += vol_score
+    reasons.append(f"量比{vol_ratio_actual}")
+
+    # 维度4: 均线位置（满分15）
+    ma_capped = min(ma_score, 15)
+    score += ma_capped
+    tags.extend(ma_tags)
+
+    # 维度5: K线形态（满分10）
+    pattern_score, pattern_name = _check_kline_pattern(opens, closes, highs, lows)
+    pattern_capped = min(pattern_score, 10)
+    score += pattern_capped
+    if pattern_name:
+        tags.append(pattern_name)
+        reasons.append(pattern_name)
+
+    # 维度6: 大盘环境（满分10）
+    env_score = max(min(market_score, 10), -10)
+    # 弱势中逆势的个股额外加分
+    if market_env == "weak":
+        stock_change = snapshot_row.get("change_pct", 0) / 100.0
+        if stock_change > 0:
+            env_score += 5
+    score += env_score
+
+    score = round(max(min(score, 100), 0), 1)
 
     return {
         "stock_code": code,
         "stock_name": name,
         "score": score,
         "drop_pct": round(drop_pct * 100, 1),
-        "volume_ratio": actual_vol_ratio,
+        "volume_ratio": vol_ratio_actual,
         "close": current_close,
         "change_pct": snapshot_row.get("change_pct", 0),
         "reason": "；".join(reasons),
+        "tags": tags,
+        "pattern": pattern_name,
+        "ma_tags": ma_tags,
+        "stab_confidence": stab_confidence,
+        "market_env": market_env,
     }
+
+
+# ============================
+# 技术分析子模块
+# ============================
+
+def _check_stabilized(closes, lows, highs, volumes) -> Tuple[bool, int]:
+    """
+    多维度企稳确认
+    返回 (是否企稳, 置信度0-3)
+    必选条件：不创新低
+    加分条件：下跌减速 / 振幅收窄 / 底部放量
+    """
+    if len(closes) < 25:
+        return False, 0
+
+    # (a) 不创新低：最近5日低点 >= 此前20日低点
+    recent_5d_low = min(lows[-5:])
+    prev_20d_low = min(lows[-25:-5])
+    no_new_low = recent_5d_low >= prev_20d_low * 0.99
+
+    if not no_new_low:
+        return False, 0
+
+    confidence = 0
+
+    # (b) 下跌速度放缓：最近5日跌幅 < 此前5日跌幅
+    if len(closes) >= 10:
+        recent_5d_drop = (closes[-1] - closes[-5]) / closes[-5]
+        prev_5d_drop = (closes[-5] - closes[-10]) / closes[-10]
+        if recent_5d_drop > prev_5d_drop:
+            confidence += 1
+
+    # (c) 振幅收窄：最近5日振幅 < 此前10日振幅
+    if len(highs) >= 15:
+        recent_range = (max(highs[-5:]) - min(lows[-5:])) / closes[-1]
+        prev_range = (max(highs[-15:-5]) - min(lows[-15:-5])) / closes[-5]
+        if recent_range < prev_range:
+            confidence += 1
+
+    # (d) 底部放量：最近3日均量 > 此前10日均量的1.3倍
+    if len(volumes) >= 13:
+        recent_avg_vol = volumes[-3:].mean()
+        prev_avg_vol = volumes[-13:-3].mean()
+        if prev_avg_vol > 0 and recent_avg_vol > prev_avg_vol * 1.3:
+            confidence += 1
+
+    return confidence >= 1, confidence
+
+
+def _check_volume_spike(volumes, snapshot_row) -> Tuple[bool, float]:
+    """
+    量能异变检测
+    返回 (是否放量, 实际量比)
+    """
+    vr = snapshot_row.get("volume_ratio", 0)
+
+    if len(volumes) >= 23:
+        avg_vol_20 = volumes[-23:-3].mean()
+        if avg_vol_20 > 0:
+            max_vol_3d = max(volumes[-3:])
+            actual_ratio = round(max_vol_3d / avg_vol_20, 2)
+            return max_vol_3d > avg_vol_20 * 2, actual_ratio
+
+    return vr >= 1.5, round(vr, 2)
+
+
+def _check_ma_support(closes) -> Tuple[float, List[str]]:
+    """
+    均线支撑分析
+    返回 (评分, 标签列表)
+    """
+    if len(closes) < 20:
+        return 0, []
+
+    s = pd.Series(closes)
+    ma5 = s.rolling(5).mean().values
+    ma10 = s.rolling(10).mean().values
+    ma20 = s.rolling(20).mean().values
+
+    score = 0.0
+    tags = []
+    current = closes[-1]
+
+    # MA5 拐头向上（短线反弹先兆）
+    if len(ma5) >= 3 and not np.isnan(ma5[-3]):
+        if ma5[-1] > ma5[-2] and ma5[-2] <= ma5[-3]:
+            score += 6
+            tags.append("MA5拐头")
+
+    # 价格站上 MA5
+    if not np.isnan(ma5[-1]) and current > ma5[-1]:
+        score += 3
+
+    # MA5 上穿 MA10（金叉）
+    if len(ma5) >= 2 and not np.isnan(ma10[-2]):
+        if ma5[-1] > ma10[-1] and ma5[-2] <= ma10[-2]:
+            score += 6
+            tags.append("金叉")
+
+    # 均线密集（MA5/10/20 距离 < 3%）
+    if not any(np.isnan(v) for v in [ma5[-1], ma10[-1], ma20[-1]]):
+        ma_max = max(ma5[-1], ma10[-1], ma20[-1])
+        ma_min = min(ma5[-1], ma10[-1], ma20[-1])
+        if current > 0:
+            spread = (ma_max - ma_min) / current
+            if spread < 0.03:
+                score += 5
+                tags.append("均线密集")
+
+    return score, tags
+
+
+def _check_kline_pattern(opens, closes, highs, lows) -> Tuple[float, str]:
+    """
+    底部K线形态识别
+    返回 (评分, 形态名称)
+    """
+    if len(closes) < 3:
+        return 0, ""
+
+    best_score = 0
+    best_pattern = ""
+
+    o, c, h, l = opens[-1], closes[-1], highs[-1], lows[-1]
+    body = abs(c - o)
+    total_range = h - l if h > l else 0.001
+
+    # 锤子线：长下影线 > 实体2倍，上影线很短
+    lower_shadow = min(o, c) - l
+    upper_shadow = h - max(o, c)
+    if body > 0 and lower_shadow > body * 2 and upper_shadow < body * 0.5:
+        best_score = 8
+        best_pattern = "锤子线"
+
+    # 阳包阴（看涨吞没）
+    if len(closes) >= 2:
+        yo, yc = opens[-2], closes[-2]
+        if yc < yo and c > o and c > yo and o < yc:
+            if 10 > best_score:
+                best_score = 10
+                best_pattern = "阳包阴"
+
+    # 早晨之星（三日反转）
+    if len(closes) >= 3:
+        o3, c3 = opens[-3], closes[-3]
+        o2, c2 = opens[-2], closes[-2]
+        big_body = abs(o3 - c3)
+        if big_body > 0 and c3 < o3 and abs(c2 - o2) < big_body * 0.3 and c > o and c > (o3 + c3) / 2:
+            if 10 > best_score:
+                best_score = 10
+                best_pattern = "早晨之星"
+
+    return best_score, best_pattern
+
+
+def _evaluate_market_env(index_kline: Optional[pd.DataFrame]) -> Tuple[float, str]:
+    """
+    大盘环境评估
+    返回 (环境评分, 环境标签)
+    """
+    if index_kline is None or len(index_kline) < 10:
+        return 0, "unknown"
+
+    closes = index_kline["close"].values
+    ma5 = pd.Series(closes).rolling(5).mean().values
+
+    today_change = (closes[-1] / closes[-2] - 1) if len(closes) >= 2 else 0
+    week_change = (closes[-1] / closes[-5] - 1) if len(closes) >= 5 else 0
+
+    # 大盘企稳或反弹中
+    if today_change > 0 and not np.isnan(ma5[-1]) and closes[-1] > ma5[-1]:
+        return 10, "bullish"
+
+    # 大盘弱势震荡
+    if today_change < -0.005 and week_change < -0.02:
+        return 5, "weak"
+
+    # 大盘暴跌
+    if today_change < -0.02:
+        return -10, "crash"
+
+    return 0, "neutral"
 
 
 # ============================

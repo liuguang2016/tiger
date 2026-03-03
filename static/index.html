@@ -207,6 +207,30 @@
                             <option value="3.0">≥3.0</option>
                         </select>
                     </label>
+                    <label class="param-group">
+                        <span class="param-label">市值范围</span>
+                        <select id="param-mv-range">
+                            <option value="all" selected>不限(&lt;5000亿)</option>
+                            <option value="small">小盘(20-100亿)</option>
+                            <option value="mid">中盘(100-500亿)</option>
+                        </select>
+                    </label>
+                    <label class="param-group">
+                        <span class="param-label">换手率</span>
+                        <select id="param-turnover">
+                            <option value="1" selected>≥1%</option>
+                            <option value="2">≥2%</option>
+                            <option value="3">≥3%</option>
+                        </select>
+                    </label>
+                    <label class="param-group">
+                        <span class="param-label">均线条件</span>
+                        <select id="param-ma-filter">
+                            <option value="none" selected>不限</option>
+                            <option value="ma5_turn">MA5拐头</option>
+                            <option value="golden_cross">金叉</option>
+                        </select>
+                    </label>
                     <button id="btn-start-screen" class="btn-screen">开始筛选</button>
                 </div>
                 <div id="screener-progress" class="screener-progress" style="display:none;">
