@@ -324,6 +324,17 @@
                         </select>
                     </label>
                     <label class="param-group">
+                        <span class="param-label">K线周期</span>
+                        <select id="crypto-interval">
+                            <option value="5m">5分钟</option>
+                            <option value="15m">15分钟</option>
+                            <option value="30m">30分钟</option>
+                            <option value="1h">1小时</option>
+                            <option value="4h" selected>4小时</option>
+                            <option value="1d">1天</option>
+                        </select>
+                    </label>
+                    <label class="param-group">
                         <span class="param-label">跌幅</span>
                         <select id="crypto-drop-pct">
                             <option value="10">≥10%</option>
@@ -338,22 +349,6 @@
                             <option value="3">-3%</option>
                             <option value="5" selected>-5%</option>
                             <option value="8">-8%</option>
-                        </select>
-                    </label>
-                    <label class="param-group">
-                        <span class="param-label">止盈1</span>
-                        <select id="crypto-tp1">
-                            <option value="5">+5%</option>
-                            <option value="8" selected>+8%</option>
-                            <option value="10">+10%</option>
-                        </select>
-                    </label>
-                    <label class="param-group">
-                        <span class="param-label">止盈2</span>
-                        <select id="crypto-tp2">
-                            <option value="10">+10%</option>
-                            <option value="15" selected>+15%</option>
-                            <option value="20">+20%</option>
                         </select>
                     </label>
                     <label class="param-group">
@@ -467,14 +462,6 @@
                             <option value="5000">5,000 USDT</option>
                             <option value="10000" selected>10,000 USDT</option>
                             <option value="50000">50,000 USDT</option>
-                        </select>
-                    </label>
-                    <label class="param-group">
-                        <span class="param-label">K线周期</span>
-                        <select id="bt-interval">
-                            <option value="1h">1小时</option>
-                            <option value="4h" selected>4小时</option>
-                            <option value="1d">1天</option>
                         </select>
                     </label>
                     <button id="btn-run-backtest" class="btn-run-backtest">运行回测</button>

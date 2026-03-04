@@ -31,9 +31,6 @@ DEFAULT_CONFIG = {
     "use_probe_confirm": True,    # 使用下探收涨确认
     "use_exit_reversal": True,    # 使用出场反转信号
     "stop_loss_pct": 5,           # 固定止损比例 %（ATR 关闭时使用）
-    "take_profit_1_pct": 8,       # 第一档止盈 %
-    "take_profit_2_pct": 15,      # 第二档止盈 %
-    "tp1_sell_ratio": 0.5,        # 第一档卖出比例
     "max_position_pct": 10,       # 单币种最大仓位 % of总资金
     "max_positions": 5,           # 最大同时持仓数
     "kline_interval": "4h",       # K线周期
@@ -127,7 +124,6 @@ class CryptoBot:
                     "unrealized_pnl": round(unrealized, 2),
                     "pnl_pct": round(pnl_pct, 2),
                     "entry_time": pos.get("entry_time", ""),
-                    "tp1_hit": pos.get("tp1_hit", False),
                 })
                 
             return {
@@ -392,7 +388,6 @@ class CryptoBot:
             "quantity": quantity,
             "entry_time": now_str,
             "amount": order_amount,
-            "tp1_hit": False,
             "highest_price": price,
             "atr": atr,
         }
@@ -484,10 +479,6 @@ class CryptoBot:
                 except Exception as e:
                     logger.debug("出场反转检查 %s 失败: %s", symbol, e)
 
-            tp1_pct = self.config.get("take_profit_1_pct", 8)
-            tp2_pct = self.config.get("take_profit_2_pct", 15)
-            tp1_ratio = self.config.get("tp1_sell_ratio", 0.5)
-
             # 计算止损价
             if use_atr and atr > 0:
                 stop_price = entry_price - 2 * atr
@@ -511,18 +502,6 @@ class CryptoBot:
                     reason = "移动止损"
                 to_close.append((symbol, pos["quantity"], reason))
                 continue
-
-            # 第一档止盈
-            if pnl_pct >= tp1_pct and not pos.get("tp1_hit"):
-                sell_qty = pos["quantity"] * tp1_ratio
-                self._execute_sell(symbol, sell_qty, "止盈1")
-                pos["tp1_hit"] = True
-                pos["quantity"] -= sell_qty
-                continue
-
-            # 第二档止盈
-            if pnl_pct >= tp2_pct:
-                to_close.append((symbol, pos["quantity"], "止盈2"))
 
         for symbol, qty, reason in to_close:
             self._execute_sell(symbol, qty, reason)

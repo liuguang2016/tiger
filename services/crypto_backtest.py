@@ -85,9 +85,6 @@ def _run_backtest(run_id: str, params: dict):
         initial_capital = float(params.get("initial_capital", 10000))
         drop_pct = float(params.get("drop_pct", 15)) / 100.0
         stop_loss_pct = float(params.get("stop_loss_pct", 5)) / 100.0
-        tp1_pct = float(params.get("take_profit_1_pct", 8)) / 100.0
-        tp2_pct = float(params.get("take_profit_2_pct", 15)) / 100.0
-        tp1_ratio = float(params.get("tp1_sell_ratio", 0.5))
         max_pos_pct = float(params.get("max_position_pct", 10)) / 100.0
         max_positions = int(params.get("max_positions", 5))
         interval = params.get("interval", "4h")
@@ -247,40 +244,6 @@ def _run_backtest(run_id: str, params: dict):
                     del positions[sym]
                     continue
 
-                # 第一档止盈
-                if not pos.get("tp1_hit") and (high / entry_price - 1) >= tp1_pct:
-                    sell_price = entry_price * (1 + tp1_pct)
-                    sell_qty = pos["quantity"] * tp1_ratio
-                    fee = sell_price * sell_qty * FEE_RATE
-                    balance += sell_price * sell_qty - fee
-                    closed_trades.append({
-                        "symbol": sym, "side": "PARTIAL",
-                        "entry_time": pos["entry_time"], "entry_price": entry_price,
-                        "exit_time": date_str, "exit_price": round(sell_price, 6),
-                        "quantity": sell_qty,
-                        "pnl": round((sell_price - entry_price) * sell_qty - fee, 2),
-                        "pnl_pct": round(tp1_pct * 100, 2),
-                        "exit_reason": "止盈1",
-                    })
-                    pos["quantity"] -= sell_qty
-                    pos["tp1_hit"] = True
-
-                # 第二档止盈
-                if (high / entry_price - 1) >= tp2_pct:
-                    sell_price = entry_price * (1 + tp2_pct)
-                    fee = sell_price * pos["quantity"] * FEE_RATE
-                    balance += sell_price * pos["quantity"] - fee
-                    closed_trades.append({
-                        "symbol": sym, "side": "ROUND",
-                        "entry_time": pos["entry_time"], "entry_price": entry_price,
-                        "exit_time": date_str, "exit_price": round(sell_price, 6),
-                        "quantity": pos["quantity"],
-                        "pnl": round((sell_price - entry_price) * pos["quantity"] - fee, 2),
-                        "pnl_pct": round(tp2_pct * 100, 2),
-                        "exit_reason": "止盈2",
-                    })
-                    del positions[sym]
-
             # 2) 扫描入场信号（完整版，与实盘对齐）
             if len(positions) < max_positions:
                 for sym, kdf in all_klines.items():
@@ -311,7 +274,6 @@ def _run_backtest(run_id: str, params: dict):
                             "entry_price": price,
                             "quantity": qty,
                             "entry_time": date_str,
-                            "tp1_hit": False,
                             "highest_price": price,
                             "atr": signal.get("atr", 0),
                         }

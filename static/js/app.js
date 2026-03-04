@@ -1329,10 +1329,9 @@ async function loadCryptoConfig() {
 function _applyCryptoParams(params) {
     const selectMapping = {
         'mode': 'crypto-mode',
+        'kline_interval': 'crypto-interval',
         'drop_pct': 'crypto-drop-pct',
         'stop_loss_pct': 'crypto-stop-loss',
-        'take_profit_1_pct': 'crypto-tp1',
-        'take_profit_2_pct': 'crypto-tp2',
         'max_position_pct': 'crypto-max-pos-pct',
         'max_positions': 'crypto-max-positions',
         'min_platform_candles': 'crypto-platform-candles',
@@ -1362,10 +1361,9 @@ function _applyCryptoParams(params) {
 function _gatherCryptoParams() {
     return {
         mode: document.getElementById('crypto-mode').value,
+        kline_interval: document.getElementById('crypto-interval').value,
         drop_pct: parseInt(document.getElementById('crypto-drop-pct').value),
         stop_loss_pct: parseInt(document.getElementById('crypto-stop-loss').value),
-        take_profit_1_pct: parseInt(document.getElementById('crypto-tp1').value),
-        take_profit_2_pct: parseInt(document.getElementById('crypto-tp2').value),
         max_position_pct: parseInt(document.getElementById('crypto-max-pos-pct').value),
         max_positions: parseInt(document.getElementById('crypto-max-positions').value),
         use_atr_stop: document.getElementById('crypto-atr-stop').checked,
@@ -1648,7 +1646,6 @@ function _renderPositionList(container, positions) {
 
         const pnlCls = pos.pnl_pct >= 0 ? 'profit' : 'loss';
         const pnlSign = pos.pnl_pct >= 0 ? '+' : '';
-        const tp1Tag = pos.tp1_hit ? '<span class="crypto-tag tp1">已止盈1</span>' : '';
 
         card.innerHTML = `
             <div class="crypto-card-header">
@@ -1660,7 +1657,7 @@ function _renderPositionList(container, positions) {
                 <span>现价 ${pos.current_price}</span>
                 <span>数量 ${pos.quantity.toFixed(6)}</span>
             </div>
-            <div class="crypto-card-tags">${tp1Tag}</div>
+            <div class="crypto-card-tags"></div>
             <div class="crypto-card-time">${pos.entry_time}</div>
         `;
         card.addEventListener('click', () => selectCryptoSymbol(pos.symbol, card));
@@ -1719,7 +1716,8 @@ async function selectCryptoSymbol(symbol, cardEl) {
     _showCryptoChartLoading(true);
 
     try {
-        const resp = await fetch(`/api/crypto/kline?symbol=${symbol}&interval=4h&limit=200`);
+        const interval = document.getElementById('crypto-interval')?.value || '4h';
+        const resp = await fetch(`/api/crypto/kline?symbol=${symbol}&interval=${interval}&limit=200`);
         const data = await resp.json();
         _showCryptoChartLoading(false);
 
@@ -1915,11 +1913,9 @@ async function runBacktest() {
     const params = {
         days: parseInt(document.getElementById('bt-days').value),
         initial_capital: parseInt(document.getElementById('bt-capital').value),
-        interval: document.getElementById('bt-interval').value,
+        interval: document.getElementById('crypto-interval').value,
         drop_pct: parseInt(document.getElementById('crypto-drop-pct').value),
         stop_loss_pct: parseInt(document.getElementById('crypto-stop-loss').value),
-        take_profit_1_pct: parseInt(document.getElementById('crypto-tp1').value),
-        take_profit_2_pct: parseInt(document.getElementById('crypto-tp2').value),
         max_position_pct: parseInt(document.getElementById('crypto-max-pos-pct').value),
         max_positions: parseInt(document.getElementById('crypto-max-positions').value),
         use_atr_stop: document.getElementById('crypto-atr-stop').checked,
