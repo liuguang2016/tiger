@@ -15,6 +15,7 @@ import pandas as pd
 
 from services.binance_client import BinanceClient
 from services import database as db
+from services import signal_engine as sig
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ DEFAULT_CONFIG = {
     "mode": "paper",              # live / paper
     "scan_interval": 300,         # 扫描间隔（秒）
     "drop_pct": 15,               # 跌幅阈值 %
-    "stop_loss_pct": 5,           # 止损比例 %
+    "stop_loss_pct": 5,           # 固定止损比例 %（ATR 关闭时使用）
     "take_profit_1_pct": 8,       # 第一档止盈 %
     "take_profit_2_pct": 15,      # 第二档止盈 %
     "tp1_sell_ratio": 0.5,        # 第一档卖出比例
@@ -34,6 +35,9 @@ DEFAULT_CONFIG = {
     "kline_interval": "4h",       # K线周期
     "kline_limit": 100,           # K线根数
     "paper_balance": 10000,       # 模拟盘初始资金 USDT
+    "use_atr_stop": True,         # 使用 ATR 动态止损
+    "use_trailing": True,         # 使用移动止损
+    "use_multi_tf": True,         # 多时间框架过滤
 }
 
 
@@ -203,8 +207,8 @@ class CryptoBot:
 
     def _analyze_signal(self, symbol: str) -> Optional[dict]:
         """
-        分析单个币种的价格行为信号
-        复用 A 股选股引擎逻辑，适配加密货币
+        分析单个币种的价格行为信号 v2
+        使用统一 signal_engine + 右侧确认 + 多时间框架 + BTC 联动增强
         """
         interval = self.config.get("kline_interval", "4h")
         limit = self.config.get("kline_limit", 100)
@@ -227,7 +231,6 @@ class CryptoBot:
         lows = df["low"].values
         volumes = df["volume"].values
 
-        # 跌幅检查
         drop_threshold = self.config.get("drop_pct", 15) / 100.0
         high_period = max(highs[-60:]) if len(highs) >= 60 else max(highs)
         current_close = closes[-1]
@@ -235,192 +238,92 @@ class CryptoBot:
         if drop_pct < drop_threshold:
             return None
 
-        # 企稳信号
-        stabilized, stab_confidence = self._check_stabilized(closes, lows, highs, volumes)
+        stabilized, stab_confidence = sig.check_stabilized(closes, lows, highs, volumes)
         if not stabilized:
             return None
 
-        # 量能异变
-        vol_spike, vol_ratio = self._check_volume_spike(volumes)
+        vol_spike, vol_ratio = sig.check_volume_spike(volumes)
         if not vol_spike:
             return None
 
-        # 均线支撑
-        ma_score, ma_tags = self._check_ma_support(closes)
+        ma_score, ma_tags = sig.check_ma_support_crypto(closes)
+        pattern_score, pattern_name = sig.check_kline_pattern(opens, closes, highs, lows)
+        reversal_score, reversal_tags = sig.check_reversal_confirmation(opens, closes, highs, lows, volumes)
 
-        # K线形态
-        pattern_score, pattern_name = self._check_kline_pattern(opens, closes, highs, lows)
+        atr = sig.calculate_atr(highs, lows, closes, 14)
 
-        # 综合评分（满分100）
-        score = 0.0
-        reasons = []
-        tags = []
+        # BTC 联动 v2
+        btc_score = self._check_btc_trend_v2()
 
-        drop_score = min(drop_pct / 0.4 * 25, 25)
-        score += drop_score
-        reasons.append(f"回落{drop_pct*100:.1f}%")
+        # 多时间框架
+        htf_score = 0
+        if self.config.get("use_multi_tf", True) and symbol != "BTCUSDT":
+            htf_score = self._check_htf(symbol)
 
-        stab_score = min(stab_confidence * 6.7, 20)
-        score += stab_score
-        reasons.append(f"企稳{stab_confidence}/3")
+        result = sig.score_crypto_signal(
+            opens, closes, highs, lows, volumes,
+            drop_pct=drop_pct,
+            stab_confidence=stab_confidence,
+            vol_ratio=vol_ratio,
+            ma_score=ma_score,
+            ma_tags=ma_tags,
+            pattern_score=pattern_score,
+            pattern_name=pattern_name,
+            reversal_score=reversal_score,
+            reversal_tags=reversal_tags,
+            btc_score=btc_score,
+            htf_score=htf_score,
+            min_score=40,
+        )
 
-        vol_score = min(max((vol_ratio - 1) * 8, 0), 20)
-        score += vol_score
-        reasons.append(f"量比{vol_ratio}")
-
-        ma_capped = min(ma_score, 15)
-        score += ma_capped
-        tags.extend(ma_tags)
-
-        pattern_capped = min(pattern_score, 10)
-        score += pattern_capped
-        if pattern_name:
-            tags.append(pattern_name)
-            reasons.append(pattern_name)
-
-        # BTC 联动加分（如果 BTC 是上涨的）
-        btc_bonus = self._check_btc_trend()
-        score += min(btc_bonus, 10)
-
-        score = round(max(min(score, 100), 0), 1)
-
-        if score < 40:
+        if result is None:
             return None
 
         return {
             "symbol": symbol,
-            "score": score,
+            "score": result["score"],
             "drop_pct": round(drop_pct * 100, 1),
             "volume_ratio": vol_ratio,
             "current_price": current_close,
             "stab_confidence": stab_confidence,
             "pattern": pattern_name,
             "ma_tags": ma_tags,
-            "tags": tags,
-            "reason": "; ".join(reasons),
+            "tags": result["tags"],
+            "reason": result["reason"],
+            "atr": atr,
         }
 
     # ------------------------------------------------------------------
-    # 技术分析
+    # BTC 联动 v2（短期 + 中期）
     # ------------------------------------------------------------------
 
-    def _check_stabilized(self, closes, lows, highs, volumes) -> Tuple[bool, int]:
-        if len(closes) < 25:
-            return False, 0
-
-        recent_5d_low = min(lows[-5:])
-        prev_20d_low = min(lows[-25:-5])
-        if recent_5d_low < prev_20d_low * 0.99:
-            return False, 0
-
-        confidence = 0
-
-        if len(closes) >= 10:
-            recent_drop = (closes[-1] - closes[-5]) / closes[-5]
-            prev_drop = (closes[-5] - closes[-10]) / closes[-10]
-            if recent_drop > prev_drop:
-                confidence += 1
-
-        if len(highs) >= 15:
-            recent_range = (max(highs[-5:]) - min(lows[-5:])) / closes[-1]
-            prev_range = (max(highs[-15:-5]) - min(lows[-15:-5])) / closes[-5]
-            if recent_range < prev_range:
-                confidence += 1
-
-        if len(volumes) >= 13:
-            recent_vol = volumes[-3:].mean()
-            prev_vol = volumes[-13:-3].mean()
-            if prev_vol > 0 and recent_vol > prev_vol * 1.3:
-                confidence += 1
-
-        return confidence >= 1, confidence
-
-    def _check_volume_spike(self, volumes) -> Tuple[bool, float]:
-        if len(volumes) >= 23:
-            avg_vol = volumes[-23:-3].mean()
-            if avg_vol > 0:
-                max_vol = max(volumes[-3:])
-                ratio = round(max_vol / avg_vol, 2)
-                return max_vol > avg_vol * 2, ratio
-        return False, 0
-
-    def _check_ma_support(self, closes) -> Tuple[float, List[str]]:
-        if len(closes) < 25:
-            return 0, []
-
-        s = pd.Series(closes)
-        ma7 = s.rolling(7).mean().values
-        ma25 = s.rolling(25).mean().values
-
-        score = 0.0
-        tags = []
-        current = closes[-1]
-
-        if len(ma7) >= 3 and not np.isnan(ma7[-3]):
-            if ma7[-1] > ma7[-2] and ma7[-2] <= ma7[-3]:
-                score += 6
-                tags.append("MA7拐头")
-
-        if not np.isnan(ma7[-1]) and current > ma7[-1]:
-            score += 3
-
-        if len(ma7) >= 2 and not np.isnan(ma25[-2]):
-            if ma7[-1] > ma25[-1] and ma7[-2] <= ma25[-2]:
-                score += 6
-                tags.append("金叉")
-
-        return score, tags
-
-    def _check_kline_pattern(self, opens, closes, highs, lows) -> Tuple[float, str]:
-        if len(closes) < 3:
-            return 0, ""
-
-        best_score = 0
-        best_pattern = ""
-
-        o, c, h, l = opens[-1], closes[-1], highs[-1], lows[-1]
-        body = abs(c - o)
-        lower_shadow = min(o, c) - l
-        upper_shadow = h - max(o, c)
-
-        if body > 0 and lower_shadow > body * 2 and upper_shadow < body * 0.5:
-            best_score = 8
-            best_pattern = "锤子线"
-
-        if len(closes) >= 2:
-            yo, yc = opens[-2], closes[-2]
-            if yc < yo and c > o and c > yo and o < yc:
-                if 10 > best_score:
-                    best_score = 10
-                    best_pattern = "阳包阴"
-
-        if len(closes) >= 3:
-            o3, c3 = opens[-3], closes[-3]
-            o2, c2 = opens[-2], closes[-2]
-            big_body = abs(o3 - c3)
-            if big_body > 0 and c3 < o3 and abs(c2 - o2) < big_body * 0.3 and c > o and c > (o3 + c3) / 2:
-                if 10 > best_score:
-                    best_score = 10
-                    best_pattern = "早晨之星"
-
-        return best_score, best_pattern
-
-    def _check_btc_trend(self) -> float:
-        """检查 BTC 趋势作为大环境参考"""
+    def _check_btc_trend_v2(self) -> float:
+        """BTC 趋势增强版：短期 4h 动量 + 日线 MA20"""
         try:
-            btc_klines = self.client.get_klines("BTCUSDT", "4h", 10)
-            if not btc_klines or len(btc_klines) < 5:
+            btc_4h = self.client.get_klines("BTCUSDT", "4h", 12)
+            btc_4h_closes = [float(k[4]) for k in btc_4h] if btc_4h else []
+
+            btc_1d = self.client.get_klines("BTCUSDT", "1d", 25)
+            btc_daily_closes = [float(k[4]) for k in btc_1d] if btc_1d else []
+
+            score, _ = sig.check_btc_trend_enhanced(btc_4h_closes, btc_daily_closes)
+            return score
+        except Exception:
+            return 0
+
+    # ------------------------------------------------------------------
+    # 多时间框架过滤
+    # ------------------------------------------------------------------
+
+    def _check_htf(self, symbol: str) -> float:
+        """日线级别趋势过滤"""
+        try:
+            daily = self.client.get_klines(symbol, "1d", 25)
+            if not daily or len(daily) < 20:
                 return 0
-            closes = [float(k[4]) for k in btc_klines]
-            change_5 = (closes[-1] / closes[-5] - 1) if len(closes) >= 5 else 0
-            if change_5 > 0.02:
-                return 10
-            elif change_5 > 0:
-                return 5
-            elif change_5 > -0.02:
-                return 0
-            else:
-                return -5
+            daily_closes = [float(k[4]) for k in daily]
+            score, _ = sig.check_higher_timeframe(daily_closes)
+            return score
         except Exception:
             return 0
 
@@ -448,20 +351,25 @@ class CryptoBot:
 
         price = signal["current_price"]
         quantity = order_amount / price
+        atr = signal.get("atr", 0)
 
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        pos_data = {
+            "entry_price": price,
+            "quantity": quantity,
+            "entry_time": now_str,
+            "amount": order_amount,
+            "tp1_hit": False,
+            "highest_price": price,
+            "atr": atr,
+        }
 
         if mode == "paper":
             self._paper_balance -= order_amount
             fee = order_amount * 0.001
             self._paper_balance -= fee
-            self._paper_positions[symbol] = {
-                "entry_price": price,
-                "quantity": quantity,
-                "entry_time": now_str,
-                "amount": order_amount,
-                "tp1_hit": False,
-            }
+            self._paper_positions[symbol] = pos_data
             db.save_crypto_trade({
                 "symbol": symbol, "side": "BUY", "price": price,
                 "quantity": quantity, "amount": order_amount,
@@ -477,13 +385,10 @@ class CryptoBot:
                 result = self.client.place_market_order_quote(symbol, "BUY", order_amount)
                 filled_qty = float(result.get("executedQty", 0))
                 filled_price = float(result.get("cummulativeQuoteQty", 0)) / filled_qty if filled_qty > 0 else price
-                self.positions[symbol] = {
-                    "entry_price": filled_price,
-                    "quantity": filled_qty,
-                    "entry_time": now_str,
-                    "amount": order_amount,
-                    "tp1_hit": False,
-                }
+                pos_data["entry_price"] = filled_price
+                pos_data["quantity"] = filled_qty
+                pos_data["highest_price"] = filled_price
+                self.positions[symbol] = pos_data
                 db.save_crypto_trade({
                     "symbol": symbol, "side": "BUY", "price": filled_price,
                     "quantity": filled_qty, "amount": order_amount,
@@ -497,9 +402,11 @@ class CryptoBot:
                 logger.error("买入 %s 失败: %s", symbol, e)
 
     def _check_positions(self):
-        """检查所有持仓，执行止损/止盈"""
+        """检查所有持仓，执行 ATR 止损 / 移动止损 / 阶梯止盈"""
         mode = self.config.get("mode", "paper")
         positions = self._paper_positions if mode == "paper" else self.positions
+        use_atr = self.config.get("use_atr_stop", True)
+        use_trailing = self.config.get("use_trailing", True)
 
         to_close = []
         for symbol, pos in list(positions.items()):
@@ -508,16 +415,39 @@ class CryptoBot:
                 continue
 
             entry_price = pos["entry_price"]
+            atr = pos.get("atr", 0)
             pnl_pct = (current_price / entry_price - 1) * 100
 
-            sl_pct = self.config.get("stop_loss_pct", 5)
+            # 更新最高价追踪
+            if current_price > pos.get("highest_price", entry_price):
+                pos["highest_price"] = current_price
+
             tp1_pct = self.config.get("take_profit_1_pct", 8)
             tp2_pct = self.config.get("take_profit_2_pct", 15)
             tp1_ratio = self.config.get("tp1_sell_ratio", 0.5)
 
-            # 止损
-            if pnl_pct <= -sl_pct:
-                to_close.append((symbol, pos["quantity"], "止损"))
+            # 计算止损价
+            if use_atr and atr > 0:
+                stop_price = entry_price - 2 * atr
+            else:
+                sl_pct = self.config.get("stop_loss_pct", 5) / 100.0
+                stop_price = entry_price * (1 - sl_pct)
+
+            # 移动止损：盈利后上移
+            if use_trailing and atr > 0:
+                pnl_in_atr = (current_price - entry_price) / atr
+                if pnl_in_atr >= 2:
+                    trailing = pos.get("highest_price", entry_price) - 1.5 * atr
+                    stop_price = max(stop_price, trailing)
+                elif pnl_in_atr >= 1:
+                    stop_price = max(stop_price, entry_price)
+
+            # 触发止损
+            if current_price <= stop_price:
+                reason = "ATR止损" if use_atr and atr > 0 else "止损"
+                if use_trailing and current_price > entry_price:
+                    reason = "移动止损"
+                to_close.append((symbol, pos["quantity"], reason))
                 continue
 
             # 第一档止盈

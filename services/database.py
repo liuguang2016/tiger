@@ -175,6 +175,8 @@ def _migrate_pool_columns(conn: sqlite3.Connection):
         ("pattern", "TEXT DEFAULT ''"),
         ("stab_confidence", "INTEGER DEFAULT 0"),
         ("market_env", "TEXT DEFAULT ''"),
+        ("platform_days", "INTEGER DEFAULT 0"),
+        ("probe_score", "REAL DEFAULT 0"),
     ]
     for col_name, col_def in new_cols:
         if col_name not in existing:
@@ -383,9 +385,10 @@ def save_pool_stocks(stocks: List[Dict]):
             """INSERT OR REPLACE INTO stock_pool
                (stock_code, stock_name, add_date, score, drop_pct,
                 volume_ratio, close_price, change_pct, reason,
-                tags, pattern, stab_confidence, market_env, status)
+                tags, pattern, stab_confidence, market_env,
+                platform_days, probe_score, status)
                VALUES (?, ?, date('now','localtime'), ?, ?, ?, ?, ?, ?,
-                       ?, ?, ?, ?, 'active')""",
+                       ?, ?, ?, ?, ?, ?, 'active')""",
             [
                 (
                     s['stock_code'], s['stock_name'], s['score'],
@@ -395,6 +398,8 @@ def save_pool_stocks(stocks: List[Dict]):
                     s.get('pattern', ''),
                     s.get('stab_confidence', 0),
                     s.get('market_env', ''),
+                    s.get('platform_days', 0),
+                    s.get('probe_score', 0),
                 )
                 for s in stocks
             ]
@@ -749,6 +754,7 @@ def _row_to_pool_dict(row: sqlite3.Row) -> Dict:
     except (json.JSONDecodeError, TypeError):
         tags = []
 
+    keys = row.keys()
     return {
         'id': row['id'],
         'stock_code': row['stock_code'],
@@ -761,7 +767,9 @@ def _row_to_pool_dict(row: sqlite3.Row) -> Dict:
         'change_pct': row['change_pct'],
         'reason': row['reason'],
         'tags': tags,
-        'pattern': row['pattern'] if 'pattern' in row.keys() else '',
-        'stab_confidence': row['stab_confidence'] if 'stab_confidence' in row.keys() else 0,
-        'market_env': row['market_env'] if 'market_env' in row.keys() else '',
+        'pattern': row['pattern'] if 'pattern' in keys else '',
+        'stab_confidence': row['stab_confidence'] if 'stab_confidence' in keys else 0,
+        'market_env': row['market_env'] if 'market_env' in keys else '',
+        'platform_days': row['platform_days'] if 'platform_days' in keys else 0,
+        'probe_score': row['probe_score'] if 'probe_score' in keys else 0,
     }

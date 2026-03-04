@@ -1,6 +1,6 @@
 """
-弹簧反弹选股引擎 v2
-基于价格行为学理论：大幅下跌后企稳 + 量能异变 + 均线支撑 + K线形态 + 大盘参考
+弹簧反弹选股引擎 v3
+核心理论升级：平台底部识别 + 下探收涨确认 + 连续抵抗信号
 两阶段筛选：快速快照过滤 → 逐股K线多维度分析 → 加权评分排序
 """
 
@@ -14,6 +14,8 @@ from typing import Optional, Dict, List, Tuple
 import numpy as np
 import pandas as pd
 import requests
+
+from services import signal_engine as sig
 
 logger = logging.getLogger(__name__)
 
@@ -87,11 +89,13 @@ def fetch_index_info() -> dict:
 
 def _run_screening(task_id: str, params: dict):
     """后台线程执行筛选"""
-    drop_pct_threshold = params.get("drop_pct", 25) / 100.0
-    volume_ratio_threshold = params.get("volume_ratio", 1.5)
+    drop_pct_threshold = params.get("drop_pct", 15) / 100.0
+    volume_ratio_threshold = params.get("volume_ratio", 1.2)
     min_turnover = params.get("min_turnover", 1.0)
     mv_range = params.get("mv_range", "all")
     ma_filter = params.get("ma_filter", "none")
+    min_platform_days = params.get("min_platform_days", 1)
+    use_probe_confirm = params.get("use_probe_confirm", True)
 
     try:
         # --- 获取大盘指数 ---
@@ -116,7 +120,6 @@ def _run_screening(task_id: str, params: dict):
 
         logger.info("获取到 %d 只A股数据", len(snapshot_df))
 
-        # 增强过滤：排除 ST/退市/新股/注册制首日/停牌/涨跌停/微盘股
         candidates = snapshot_df[
             (~snapshot_df["name"].str.contains("ST|退|N|C", na=False)) &
             (snapshot_df["volume"] > 0) &
@@ -126,7 +129,6 @@ def _run_screening(task_id: str, params: dict):
             (snapshot_df["total_mv"] > 2e9)
         ].copy()
 
-        # 市值范围过滤
         if mv_range == "small":
             candidates = candidates[(candidates["total_mv"] >= 2e9) & (candidates["total_mv"] <= 100e9)]
         elif mv_range == "mid":
@@ -134,8 +136,8 @@ def _run_screening(task_id: str, params: dict):
         elif mv_range == "all":
             candidates = candidates[candidates["total_mv"] <= 500e9]
 
-        # 量比过滤
-        candidates = candidates[candidates["volume_ratio"] >= volume_ratio_threshold]
+        # 量比从硬性门槛改为软过滤：保留量比 >= 0.8 的（太低的直接排除）
+        candidates = candidates[candidates["volume_ratio"] >= 0.8]
         logger.info("Stage 1 过滤后 %d 只候选股", len(candidates))
 
         if candidates.empty:
@@ -159,6 +161,7 @@ def _run_screening(task_id: str, params: dict):
                     code, row["name"], row,
                     index_kline, market_score, market_env,
                     drop_pct_threshold, ma_filter,
+                    min_platform_days, use_probe_confirm,
                 )
                 if result:
                     results.append(result)
@@ -260,10 +263,14 @@ def _analyze_candidate(
     market_env: str,
     drop_threshold: float,
     ma_filter: str,
+    min_platform_days: int = 1,
+    use_probe_confirm: bool = True,
 ) -> Optional[Dict]:
     """
-    对单只股票进行多维度技术分析
-    评分维度：跌幅深度(25) + 企稳质量(20) + 量能异变(20) + 均线位置(15) + K线形态(10) + 大盘环境(10)
+    对单只股票进行多维度技术分析 v3
+    评分维度（7维）：
+      平台底部质量(20) + 下探收涨信号(25) + 企稳质量(10) +
+      量能配合(15) + 均线位置(10) + K线形态(10) + 大盘环境(10)
     """
     kline_df = _fetch_stock_kline(code, days=90)
     if kline_df is None or len(kline_df) < 30:
@@ -275,61 +282,88 @@ def _analyze_candidate(
     lows = kline_df["low"].values
     volumes = kline_df["volume"].values
 
-    high_60d = max(highs[-60:]) if len(highs) >= 60 else max(highs)
-    current_close = closes[-1]
+    # ===== 硬性条件 =====
 
-    # ===== 硬性条件（不满足直接排除）=====
+    # 条件1: 平台底部（替代简单跌幅百分比）
+    has_platform, platform_info = sig.check_platform_bottom(
+        closes, lows, highs, min_platform_days=min_platform_days
+    )
+    if not has_platform:
+        # 回退：如果没有平台底部，仍检查跌幅是否足够大（兼容旧逻辑）
+        high_60d = max(highs[-60:]) if len(highs) >= 60 else max(highs)
+        drop_pct = (high_60d - closes[-1]) / high_60d
+        if drop_pct < drop_threshold:
+            return None
+        # 有跌幅但无平台 → 平台分为 0，继续评分
+        platform_info = {
+            "platform_days": 0, "drop_from_high": round(drop_pct * 100, 1),
+            "platform_range_pct": 0, "score": 0, "tag": ""
+        }
 
-    # 条件1: 跌幅达标
-    drop_pct = (high_60d - current_close) / high_60d
-    if drop_pct < drop_threshold:
-        return None
+    # 条件2: 下探收涨信号（核心买入信号）
+    probe_score, probe_tags = sig.check_probe_and_close_up(opens, closes, highs, lows, volumes)
+    if use_probe_confirm and probe_score < 8:
+        # 下探收涨是核心信号，低于 8 分说明没有明显的抵抗承接
+        # 但如果平台底部很强（>= 12），仍可通过
+        if platform_info["score"] < 12:
+            return None
 
-    # 条件2: 企稳信号（多维度确认）
-    stabilized, stab_confidence = _check_stabilized(closes, lows, highs, volumes)
-    if not stabilized:
-        return None
-
-    # 条件3: 量能异变
-    vol_spike, vol_ratio_actual = _check_volume_spike(volumes, snapshot_row)
-    if not vol_spike:
-        return None
-
-    # 条件4: 均线过滤（可选）
+    # 条件3: 均线过滤（可选）
     ma_score, ma_tags = _check_ma_support(closes)
     if ma_filter == "ma5_turn" and "MA5拐头" not in ma_tags:
         return None
     if ma_filter == "golden_cross" and "金叉" not in ma_tags:
         return None
 
-    # ===== 多维度加权评分 =====
+    # ===== 多维度加权评分（满分 100） =====
 
     score = 0.0
     reasons = []
     tags = []
 
-    # 维度1: 跌幅深度（满分25）
-    drop_score = min(drop_pct / 0.5 * 25, 25)
-    score += drop_score
-    reasons.append(f"60日高点回落{drop_pct*100:.1f}%")
+    # 维度1: 平台底部质量（满分 20）
+    plat_score = min(platform_info["score"], 20)
+    score += plat_score
+    if platform_info["tag"]:
+        tags.append(platform_info["tag"])
+    if platform_info["platform_days"] > 0:
+        reasons.append(f"平台{platform_info['platform_days']}天")
+    reasons.append(f"高点回落{platform_info['drop_from_high']}%")
 
-    # 维度2: 企稳质量（满分20）
-    stab_score = min(stab_confidence * 6.7, 20)
+    # 维度2: 下探收涨信号（满分 25）— 最核心维度
+    probe_capped = min(probe_score, 25)
+    score += probe_capped
+    tags.extend(probe_tags)
+    if probe_tags:
+        reasons.append("；".join(probe_tags))
+
+    # 维度3: 企稳质量（满分 10，降权因平台底部已含企稳信息）
+    stabilized, stab_confidence = _check_stabilized(closes, lows, highs, volumes)
+    stab_score = min(stab_confidence * 3.3, 10) if stabilized else 0
     score += stab_score
-    reasons.append(f"企稳置信{stab_confidence}/3")
 
-    # 维度3: 量能异变（满分20）
+    # 维度4: 量能配合（满分 15）— 从硬性条件改为加分项
+    vol_spike, vol_ratio_actual = _check_volume_spike(volumes, snapshot_row)
     vr = snapshot_row.get("volume_ratio", 0)
-    vol_score = min(max((vol_ratio_actual - 1) * 8, 0), 20)
+    vol_score = 0.0
+    if vol_spike:
+        vol_score += 8
+    if vr >= 2.0:
+        vol_score += 7
+    elif vr >= 1.5:
+        vol_score += 5
+    elif vr >= 1.2:
+        vol_score += 3
+    vol_score = min(vol_score, 15)
     score += vol_score
-    reasons.append(f"量比{vol_ratio_actual}")
+    reasons.append(f"量比{round(max(vol_ratio_actual, vr), 2)}")
 
-    # 维度4: 均线位置（满分15）
-    ma_capped = min(ma_score, 15)
+    # 维度5: 均线位置（满分 10）
+    ma_capped = min(ma_score, 10)
     score += ma_capped
     tags.extend(ma_tags)
 
-    # 维度5: K线形态（满分10）
+    # 维度6: K线形态（满分 10）
     pattern_score, pattern_name = _check_kline_pattern(opens, closes, highs, lows)
     pattern_capped = min(pattern_score, 10)
     score += pattern_capped
@@ -337,9 +371,8 @@ def _analyze_candidate(
         tags.append(pattern_name)
         reasons.append(pattern_name)
 
-    # 维度6: 大盘环境（满分10）
+    # 维度7: 大盘环境（满分 10）
     env_score = max(min(market_score, 10), -10)
-    # 弱势中逆势的个股额外加分
     if market_env == "weak":
         stock_change = snapshot_row.get("change_pct", 0) / 100.0
         if stock_change > 0:
@@ -348,20 +381,28 @@ def _analyze_candidate(
 
     score = round(max(min(score, 100), 0), 1)
 
+    # 总分低于 30 不入选
+    if score < 30:
+        return None
+
+    drop_pct_display = platform_info.get("drop_from_high", 0)
+
     return {
         "stock_code": code,
         "stock_name": name,
         "score": score,
-        "drop_pct": round(drop_pct * 100, 1),
-        "volume_ratio": vol_ratio_actual,
-        "close": current_close,
+        "drop_pct": drop_pct_display,
+        "volume_ratio": round(max(vol_ratio_actual, vr), 2),
+        "close": closes[-1],
         "change_pct": snapshot_row.get("change_pct", 0),
         "reason": "；".join(reasons),
         "tags": tags,
         "pattern": pattern_name,
         "ma_tags": ma_tags,
-        "stab_confidence": stab_confidence,
+        "stab_confidence": stab_confidence if stabilized else 0,
         "market_env": market_env,
+        "platform_days": platform_info.get("platform_days", 0),
+        "probe_score": probe_capped,
     }
 
 

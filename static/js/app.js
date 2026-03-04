@@ -886,6 +886,8 @@ async function startScreening() {
     progressEl.style.display = 'flex';
 
     const dropPct = parseInt(document.getElementById('param-drop-pct').value);
+    const platformDays = parseInt(document.getElementById('param-platform-days').value);
+    const probeConfirm = document.getElementById('param-probe-confirm').checked;
     const volRatio = parseFloat(document.getElementById('param-vol-ratio').value);
     const mvRange = document.getElementById('param-mv-range').value;
     const minTurnover = parseFloat(document.getElementById('param-turnover').value);
@@ -897,6 +899,8 @@ async function startScreening() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 drop_pct: dropPct,
+                min_platform_days: platformDays,
+                use_probe_confirm: probeConfirm,
                 volume_ratio: volRatio,
                 mv_range: mvRange,
                 min_turnover: minTurnover,
@@ -1003,12 +1007,19 @@ function renderPoolList(stocks) {
             let cls = 'signal';
             if (tag === '锤子线' || tag === '阳包阴' || tag === '早晨之星') cls = 'pattern';
             if (tag === 'MA5拐头' || tag === '金叉' || tag === '均线密集') cls = 'ma';
+            if (tag === '下探收涨' || tag === '连续确认' || tag === '多次探底' ||
+                tag === '放量承接' || tag === '底部抬升') cls = 'probe';
+            if (tag === '窄幅平台' || tag === '平台底部' || tag === '宽幅筑底') cls = 'platform';
             extraTags += `<span class="pool-tag ${cls}">${escapeHtml(tag)}</span>`;
         });
 
         const confDots = stock.stab_confidence || 0;
         const confHtml = confDots > 0
             ? `<span class="pool-tag confidence">企稳${'★'.repeat(confDots)}${'☆'.repeat(3 - confDots)}</span>`
+            : '';
+
+        const platformHtml = stock.platform_days > 0
+            ? `<span class="pool-tag platform">底部${stock.platform_days}天</span>`
             : '';
 
         card.innerHTML = `
@@ -1021,6 +1032,7 @@ function renderPoolList(stocks) {
             </div>
             <div class="pool-card-tags">
                 <span class="pool-tag drop">跌${stock.drop_pct}%</span>
+                ${platformHtml}
                 <span class="pool-tag vol">量比${stock.volume_ratio}</span>
                 <span class="pool-tag price">${stock.close_price} (${changeSign}${stock.change_pct}%)</span>
                 ${confHtml}
@@ -1315,7 +1327,7 @@ async function loadCryptoConfig() {
 }
 
 function _applyCryptoParams(params) {
-    const mapping = {
+    const selectMapping = {
         'mode': 'crypto-mode',
         'drop_pct': 'crypto-drop-pct',
         'stop_loss_pct': 'crypto-stop-loss',
@@ -1324,10 +1336,21 @@ function _applyCryptoParams(params) {
         'max_position_pct': 'crypto-max-pos-pct',
         'max_positions': 'crypto-max-positions',
     };
-    for (const [key, elId] of Object.entries(mapping)) {
+    for (const [key, elId] of Object.entries(selectMapping)) {
         if (params[key] != null) {
             const el = document.getElementById(elId);
             if (el) el.value = String(params[key]);
+        }
+    }
+    const checkboxMapping = {
+        'use_atr_stop': 'crypto-atr-stop',
+        'use_trailing': 'crypto-trailing',
+        'use_multi_tf': 'crypto-multi-tf',
+    };
+    for (const [key, elId] of Object.entries(checkboxMapping)) {
+        if (params[key] != null) {
+            const el = document.getElementById(elId);
+            if (el) el.checked = !!params[key];
         }
     }
 }
@@ -1341,6 +1364,9 @@ function _gatherCryptoParams() {
         take_profit_2_pct: parseInt(document.getElementById('crypto-tp2').value),
         max_position_pct: parseInt(document.getElementById('crypto-max-pos-pct').value),
         max_positions: parseInt(document.getElementById('crypto-max-positions').value),
+        use_atr_stop: document.getElementById('crypto-atr-stop').checked,
+        use_trailing: document.getElementById('crypto-trailing').checked,
+        use_multi_tf: document.getElementById('crypto-multi-tf').checked,
     };
 }
 
@@ -1875,6 +1901,8 @@ async function runBacktest() {
         take_profit_2_pct: parseInt(document.getElementById('crypto-tp2').value),
         max_position_pct: parseInt(document.getElementById('crypto-max-pos-pct').value),
         max_positions: parseInt(document.getElementById('crypto-max-positions').value),
+        use_atr_stop: document.getElementById('crypto-atr-stop').checked,
+        use_trailing: document.getElementById('crypto-trailing').checked,
     };
 
     try {

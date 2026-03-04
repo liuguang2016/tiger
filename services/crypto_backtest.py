@@ -16,6 +16,7 @@ import pandas as pd
 
 from services.binance_client import BinanceClient
 from services import database as db
+from services import signal_engine as sig
 
 logger = logging.getLogger(__name__)
 
@@ -130,9 +131,11 @@ def _run_backtest(run_id: str, params: dict):
             _update_multi(status="error", message="无有效K线数据")
             return
 
+        use_atr_stop = params.get("use_atr_stop", True)
+        use_trailing = params.get("use_trailing", True)
+
         _update("message", "逐根K线模拟交易...")
 
-        # 找出公共时间线
         all_dates = set()
         for df in all_klines.values():
             all_dates.update(df["open_time"].tolist())
@@ -165,12 +168,35 @@ def _run_backtest(run_id: str, params: dict):
                 pos = positions[sym]
                 entry_price = pos["entry_price"]
 
-                # 止损: 用 low 判断
-                if (low / entry_price - 1) <= -stop_loss_pct:
-                    sell_price = entry_price * (1 - stop_loss_pct)
+                # 更新最高价追踪
+                if close > pos.get("highest_price", entry_price):
+                    pos["highest_price"] = close
+
+                atr_val = pos.get("atr", 0)
+
+                # ATR 动态止损 或 固定百分比止损
+                if use_atr_stop and atr_val > 0:
+                    stop_price = entry_price - 2 * atr_val
+                else:
+                    stop_price = entry_price * (1 - stop_loss_pct)
+
+                # 移动止损（盈利后上移）
+                if use_trailing and atr_val > 0:
+                    pnl_atr = (close - entry_price) / atr_val if atr_val > 0 else 0
+                    if pnl_atr >= 2:
+                        trailing = pos.get("highest_price", entry_price) - 1.5 * atr_val
+                        stop_price = max(stop_price, trailing)
+                    elif pnl_atr >= 1:
+                        stop_price = max(stop_price, entry_price)
+
+                if low <= stop_price:
+                    sell_price = max(stop_price, low)
                     pnl = (sell_price - entry_price) * pos["quantity"]
                     fee = sell_price * pos["quantity"] * FEE_RATE
                     balance += sell_price * pos["quantity"] - fee
+                    reason = "ATR止损" if use_atr_stop and atr_val > 0 else "止损"
+                    if use_trailing and sell_price > entry_price:
+                        reason = "移动止损"
                     closed_trades.append({
                         "symbol": sym, "side": "ROUND",
                         "entry_time": pos["entry_time"], "entry_price": entry_price,
@@ -178,7 +204,7 @@ def _run_backtest(run_id: str, params: dict):
                         "quantity": pos["quantity"],
                         "pnl": round(pnl - fee, 2),
                         "pnl_pct": round((sell_price / entry_price - 1) * 100, 2),
-                        "exit_reason": "止损",
+                        "exit_reason": reason,
                     })
                     del positions[sym]
                     continue
@@ -217,7 +243,7 @@ def _run_backtest(run_id: str, params: dict):
                     })
                     del positions[sym]
 
-            # 2) 扫描入场信号
+            # 2) 扫描入场信号（完整版，与实盘对齐）
             if len(positions) < max_positions:
                 for sym, kdf in all_klines.items():
                     if sym in positions:
@@ -229,7 +255,7 @@ def _run_backtest(run_id: str, params: dict):
                     if len(window) < 30:
                         continue
 
-                    signal = _check_entry_signal(window, drop_pct)
+                    signal = _analyze_entry_full(window, drop_pct)
                     if signal:
                         price = window.iloc[-1]["close"]
                         order_amount = min(balance * max_pos_pct, balance)
@@ -243,6 +269,8 @@ def _run_backtest(run_id: str, params: dict):
                             "quantity": qty,
                             "entry_time": date_str,
                             "tp1_hit": False,
+                            "highest_price": price,
+                            "atr": signal.get("atr", 0),
                         }
 
             # 3) 记录资金曲线
@@ -312,64 +340,61 @@ def _run_backtest(run_id: str, params: dict):
 
 
 # ==================================================================
-# 信号判断（复用 crypto_trader 逻辑的简化版）
+# 信号判断（完整版，与实盘 _analyze_signal 对齐）
 # ==================================================================
 
-def _check_entry_signal(window: pd.DataFrame, drop_threshold: float) -> bool:
-    """判断当前K线窗口是否满足入场信号"""
+def _analyze_entry_full(window: pd.DataFrame, drop_threshold: float) -> Optional[Dict]:
+    """
+    完整入场信号分析，复用 signal_engine 中所有分析模块
+    返回 None（不入场）或 包含 score/atr 的 dict（入场）
+    """
     closes = window["close"].values
     highs = window["high"].values
     lows = window["low"].values
     volumes = window["volume"].values
     opens = window["open"].values
 
-    # 跌幅
     high_period = max(highs[-60:]) if len(highs) >= 60 else max(highs)
     current = closes[-1]
     drop_pct = (high_period - current) / high_period
     if drop_pct < drop_threshold:
-        return False
+        return None
 
-    # 企稳
-    if len(closes) < 25:
-        return False
-    recent_low = min(lows[-5:])
-    prev_low = min(lows[-25:-5])
-    if recent_low < prev_low * 0.99:
-        return False
+    stabilized, stab_confidence = sig.check_stabilized(closes, lows, highs, volumes)
+    if not stabilized:
+        return None
 
-    confidence = 0
-    if len(closes) >= 10:
-        r_drop = (closes[-1] - closes[-5]) / closes[-5]
-        p_drop = (closes[-5] - closes[-10]) / closes[-10]
-        if r_drop > p_drop:
-            confidence += 1
-    if len(highs) >= 15:
-        r_range = (max(highs[-5:]) - min(lows[-5:])) / closes[-1]
-        p_range = (max(highs[-15:-5]) - min(lows[-15:-5])) / closes[-5]
-        if r_range < p_range:
-            confidence += 1
-    if len(volumes) >= 13:
-        rv = volumes[-3:].mean()
-        pv = volumes[-13:-3].mean()
-        if pv > 0 and rv > pv * 1.3:
-            confidence += 1
-    if confidence < 1:
-        return False
+    vol_spike, vol_ratio = sig.check_volume_spike(volumes)
+    if not vol_spike:
+        return None
 
-    # 量能异变
-    if len(volumes) >= 23:
-        avg_vol = volumes[-23:-3].mean()
-        if avg_vol > 0:
-            max_vol = max(volumes[-3:])
-            if max_vol <= avg_vol * 2:
-                return False
-        else:
-            return False
-    else:
-        return False
+    ma_score, ma_tags = sig.check_ma_support_crypto(closes)
+    pattern_score, pattern_name = sig.check_kline_pattern(opens, closes, highs, lows)
+    reversal_score, reversal_tags = sig.check_reversal_confirmation(opens, closes, highs, lows, volumes)
 
-    return True
+    atr = sig.calculate_atr(highs, lows, closes, 14)
+
+    result = sig.score_crypto_signal(
+        opens, closes, highs, lows, volumes,
+        drop_pct=drop_pct,
+        stab_confidence=stab_confidence,
+        vol_ratio=vol_ratio,
+        ma_score=ma_score,
+        ma_tags=ma_tags,
+        pattern_score=pattern_score,
+        pattern_name=pattern_name,
+        reversal_score=reversal_score,
+        reversal_tags=reversal_tags,
+        btc_score=0,
+        htf_score=0,
+        min_score=40,
+    )
+
+    if result is None:
+        return None
+
+    result["atr"] = atr
+    return result
 
 
 # ==================================================================

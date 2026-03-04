@@ -193,21 +193,34 @@
             <section class="screener-controls">
                 <div class="screener-params">
                     <label class="param-group">
-                        <span class="param-label">跌幅阈值</span>
+                        <span class="param-label">回落幅度</span>
                         <select id="param-drop-pct">
+                            <option value="10">≥10%</option>
+                            <option value="15" selected>≥15%</option>
                             <option value="20">≥20%</option>
-                            <option value="25" selected>≥25%</option>
-                            <option value="30">≥30%</option>
-                            <option value="35">≥35%</option>
+                            <option value="25">≥25%</option>
                         </select>
+                    </label>
+                    <label class="param-group">
+                        <span class="param-label">底部天数</span>
+                        <select id="param-platform-days">
+                            <option value="1" selected>≥1天</option>
+                            <option value="2">≥2天</option>
+                            <option value="3">≥3天</option>
+                            <option value="4">≥4天</option>
+                        </select>
+                    </label>
+                    <label class="param-group param-toggle">
+                        <input type="checkbox" id="param-probe-confirm" checked>
+                        <span class="param-label">下探确认</span>
                     </label>
                     <label class="param-group">
                         <span class="param-label">量比阈值</span>
                         <select id="param-vol-ratio">
+                            <option value="0.8">≥0.8</option>
                             <option value="1.0">≥1.0</option>
-                            <option value="1.5" selected>≥1.5</option>
-                            <option value="2.0">≥2.0</option>
-                            <option value="3.0">≥3.0</option>
+                            <option value="1.2" selected>≥1.2</option>
+                            <option value="1.5">≥1.5</option>
                         </select>
                     </label>
                     <label class="param-group">
@@ -360,6 +373,18 @@
                             <option value="8">8个</option>
                             <option value="10">10个</option>
                         </select>
+                    </label>
+                    <label class="param-group param-toggle">
+                        <input type="checkbox" id="crypto-atr-stop" checked>
+                        <span class="param-label">ATR止损</span>
+                    </label>
+                    <label class="param-group param-toggle">
+                        <input type="checkbox" id="crypto-trailing" checked>
+                        <span class="param-label">移动止损</span>
+                    </label>
+                    <label class="param-group param-toggle">
+                        <input type="checkbox" id="crypto-multi-tf" checked>
+                        <span class="param-label">多周期</span>
                     </label>
                 </div>
                 <div class="crypto-actions">
