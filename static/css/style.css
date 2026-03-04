@@ -728,7 +728,7 @@ body {
 .kline-chart {
     width: 100%;
     flex: 1;
-    min-height: 0;
+    min-height: 280px;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
@@ -1603,6 +1603,7 @@ body {
 .crypto-chart-panel {
     flex: 1;
     min-width: 0;
+    min-height: 400px;
     display: flex;
     flex-direction: column;
     height: 100%;

@@ -1335,6 +1335,7 @@ function _applyCryptoParams(params) {
         'take_profit_2_pct': 'crypto-tp2',
         'max_position_pct': 'crypto-max-pos-pct',
         'max_positions': 'crypto-max-positions',
+        'min_platform_candles': 'crypto-platform-candles',
     };
     for (const [key, elId] of Object.entries(selectMapping)) {
         if (params[key] != null) {
@@ -1346,6 +1347,9 @@ function _applyCryptoParams(params) {
         'use_atr_stop': 'crypto-atr-stop',
         'use_trailing': 'crypto-trailing',
         'use_multi_tf': 'crypto-multi-tf',
+        'use_platform_bottom': 'crypto-platform-bottom',
+        'use_probe_confirm': 'crypto-probe-confirm',
+        'use_exit_reversal': 'crypto-exit-reversal',
     };
     for (const [key, elId] of Object.entries(checkboxMapping)) {
         if (params[key] != null) {
@@ -1367,6 +1371,10 @@ function _gatherCryptoParams() {
         use_atr_stop: document.getElementById('crypto-atr-stop').checked,
         use_trailing: document.getElementById('crypto-trailing').checked,
         use_multi_tf: document.getElementById('crypto-multi-tf').checked,
+        use_platform_bottom: document.getElementById('crypto-platform-bottom')?.checked ?? true,
+        use_probe_confirm: document.getElementById('crypto-probe-confirm')?.checked ?? true,
+        min_platform_candles: parseInt(document.getElementById('crypto-platform-candles')?.value ?? 20),
+        use_exit_reversal: document.getElementById('crypto-exit-reversal')?.checked ?? true,
     };
 }
 
@@ -1736,7 +1744,16 @@ function renderCryptoKlineChart(data) {
     });
 
     const { dates, ohlcv, volumes, ma7, ma25, ma99 } = data;
-    const volumeColors = ohlcv.map(item => item[1] >= item[0] ? 1 : -1);
+    if (!ohlcv || !dates || ohlcv.length === 0 || dates.length === 0) {
+        _showCryptoChartError('K线数据为空');
+        return;
+    }
+    // 确保 K 线数据格式正确：ECharts 要求 [open, close, lowest, highest]
+    const ohlcvValid = ohlcv.map(row => {
+        const o = Number(row[0]), c = Number(row[1]), l = Number(row[2]), h = Number(row[3]);
+        return [o, c, Math.min(l, h), Math.max(l, h)];
+    });
+    const volumeColors = ohlcvValid.map(item => item[1] >= item[0] ? 1 : -1);
     const zoomStart = Math.max(0, 100 - (80 / Math.max(dates.length, 1)) * 100);
 
     const option = {
@@ -1816,7 +1833,8 @@ function renderCryptoKlineChart(data) {
         series: [
             {
                 name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0,
-                data: ohlcv,
+                data: ohlcvValid,
+                barMaxWidth: 24,
                 itemStyle: {
                     color: '#f85149', color0: '#3fb950',
                     borderColor: '#f85149', borderColor0: '#3fb950',
@@ -1852,6 +1870,9 @@ function renderCryptoKlineChart(data) {
     };
 
     cryptoChartInstance.setOption(option, true);
+    requestAnimationFrame(() => {
+        if (cryptoChartInstance) cryptoChartInstance.resize();
+    });
 }
 
 function _showCryptoChartLoading(show) {
@@ -1903,6 +1924,10 @@ async function runBacktest() {
         max_positions: parseInt(document.getElementById('crypto-max-positions').value),
         use_atr_stop: document.getElementById('crypto-atr-stop').checked,
         use_trailing: document.getElementById('crypto-trailing').checked,
+        use_exit_reversal: document.getElementById('crypto-exit-reversal')?.checked ?? true,
+        min_platform_candles: parseInt(document.getElementById('crypto-platform-candles')?.value ?? 20),
+        use_platform_bottom: document.getElementById('crypto-platform-bottom')?.checked ?? true,
+        use_probe_confirm: document.getElementById('crypto-probe-confirm')?.checked ?? true,
     };
 
     try {

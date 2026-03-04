@@ -133,6 +133,10 @@ def _run_backtest(run_id: str, params: dict):
 
         use_atr_stop = params.get("use_atr_stop", True)
         use_trailing = params.get("use_trailing", True)
+        use_exit_reversal = params.get("use_exit_reversal", True)
+        min_platform_candles = params.get("min_platform_candles", 20)
+        use_platform = params.get("use_platform_bottom", True)
+        use_probe = params.get("use_probe_confirm", True)
 
         _update("message", "逐根K线模拟交易...")
 
@@ -173,6 +177,40 @@ def _run_backtest(run_id: str, params: dict):
                     pos["highest_price"] = close
 
                 atr_val = pos.get("atr", 0)
+
+                # 出场反转信号（十字星+放量 / 长上影+放量 at 前高 / 上涨幅度收窄+压力）
+                if use_exit_reversal:
+                    hist = kdf[kdf["open_time"] <= ts].tail(25)
+                    if len(hist) >= 10:
+                        o_arr = hist["open"].values.astype(float)
+                        c_arr = hist["close"].values.astype(float)
+                        h_arr = hist["high"].values.astype(float)
+                        l_arr = hist["low"].values.astype(float)
+                        v_arr = hist["volume"].values.astype(float)
+                        recent_high = max(h_arr[-21:-1]) if len(h_arr) >= 21 else max(h_arr[:-1])
+                        triggered, reason = sig.check_exit_reversal_at_high(
+                            o_arr, c_arr, h_arr, l_arr, v_arr, recent_high
+                        )
+                        if not (triggered and reason):
+                            triggered, reason = sig.check_momentum_narrowing(
+                                o_arr, c_arr, h_arr, l_arr, v_arr
+                            )
+                        if triggered and reason:
+                            sell_price = close
+                            fee = sell_price * pos["quantity"] * FEE_RATE
+                            pnl = (sell_price - entry_price) * pos["quantity"]
+                            balance += sell_price * pos["quantity"] - fee
+                            closed_trades.append({
+                                "symbol": sym, "side": "ROUND",
+                                "entry_time": pos["entry_time"], "entry_price": entry_price,
+                                "exit_time": date_str, "exit_price": round(sell_price, 6),
+                                "quantity": pos["quantity"],
+                                "pnl": round(pnl - fee, 2),
+                                "pnl_pct": round((sell_price / entry_price - 1) * 100, 2),
+                                "exit_reason": reason,
+                            })
+                            del positions[sym]
+                            continue
 
                 # ATR 动态止损 或 固定百分比止损
                 if use_atr_stop and atr_val > 0:
@@ -255,7 +293,12 @@ def _run_backtest(run_id: str, params: dict):
                     if len(window) < 30:
                         continue
 
-                    signal = _analyze_entry_full(window, drop_pct)
+                    signal = _analyze_entry_full(
+                        window, drop_pct,
+                        min_platform_candles=min_platform_candles,
+                        use_platform=use_platform,
+                        use_probe=use_probe,
+                    )
                     if signal:
                         price = window.iloc[-1]["close"]
                         order_amount = min(balance * max_pos_pct, balance)
@@ -340,13 +383,19 @@ def _run_backtest(run_id: str, params: dict):
 
 
 # ==================================================================
-# 信号判断（完整版，与实盘 _analyze_signal 对齐）
+# 信号判断（v3 与实盘 _analyze_signal 完全对齐：平台底部 + 下探收涨）
 # ==================================================================
 
-def _analyze_entry_full(window: pd.DataFrame, drop_threshold: float) -> Optional[Dict]:
+def _analyze_entry_full(
+    window: pd.DataFrame,
+    drop_threshold: float,
+    min_platform_candles: int = 20,
+    use_platform: bool = True,
+    use_probe: bool = True,
+) -> Optional[Dict]:
     """
-    完整入场信号分析，复用 signal_engine 中所有分析模块
-    返回 None（不入场）或 包含 score/atr 的 dict（入场）
+    完整入场信号分析 v3，与 crypto_trader._analyze_signal 对齐
+    平台底部 + 下探收涨 + score_crypto_signal_v3
     """
     closes = window["close"].values
     highs = window["high"].values
@@ -354,37 +403,61 @@ def _analyze_entry_full(window: pd.DataFrame, drop_threshold: float) -> Optional
     volumes = window["volume"].values
     opens = window["open"].values
 
-    high_period = max(highs[-60:]) if len(highs) >= 60 else max(highs)
-    current = closes[-1]
-    drop_pct = (high_period - current) / high_period
-    if drop_pct < drop_threshold:
-        return None
+    platform_info = {"platform_days": 0, "drop_from_high": 0, "score": 0, "tag": ""}
+    if use_platform:
+        has_platform, platform_info = sig.check_platform_bottom(
+            closes, lows, highs, min_platform_days=min_platform_candles
+        )
+        if not has_platform:
+            high_60d = max(highs[-60:]) if len(highs) >= 60 else max(highs)
+            drop_pct = (high_60d - closes[-1]) / high_60d
+            if drop_pct < drop_threshold:
+                return None
+            platform_info = {
+                "platform_days": 0,
+                "drop_from_high": round(drop_pct * 100, 1),
+                "score": 0,
+                "tag": "",
+            }
+    else:
+        high_period = max(highs[-60:]) if len(highs) >= 60 else max(highs)
+        drop_pct = (high_period - closes[-1]) / high_period
+        if drop_pct < drop_threshold:
+            return None
+        platform_info = {
+            "platform_days": 0,
+            "drop_from_high": round(drop_pct * 100, 1),
+            "score": min(drop_pct / 0.4 * 10, 20),
+            "tag": "",
+        }
+
+    probe_score, probe_tags = sig.check_probe_and_close_up(
+        opens, closes, highs, lows, volumes
+    )
+    if use_probe and probe_score < 8:
+        if platform_info.get("score", 0) < 12:
+            return None
 
     stabilized, stab_confidence = sig.check_stabilized(closes, lows, highs, volumes)
-    if not stabilized:
-        return None
-
     vol_spike, vol_ratio = sig.check_volume_spike(volumes)
-    if not vol_spike:
+    if not vol_spike and vol_ratio < 1.5:
         return None
 
     ma_score, ma_tags = sig.check_ma_support_crypto(closes)
     pattern_score, pattern_name = sig.check_kline_pattern(opens, closes, highs, lows)
-    reversal_score, reversal_tags = sig.check_reversal_confirmation(opens, closes, highs, lows, volumes)
-
     atr = sig.calculate_atr(highs, lows, closes, 14)
 
-    result = sig.score_crypto_signal(
+    result = sig.score_crypto_signal_v3(
         opens, closes, highs, lows, volumes,
-        drop_pct=drop_pct,
+        platform_info=platform_info,
+        probe_score=probe_score,
+        probe_tags=probe_tags,
         stab_confidence=stab_confidence,
         vol_ratio=vol_ratio,
         ma_score=ma_score,
         ma_tags=ma_tags,
         pattern_score=pattern_score,
         pattern_name=pattern_name,
-        reversal_score=reversal_score,
-        reversal_tags=reversal_tags,
         btc_score=0,
         htf_score=0,
         min_score=40,

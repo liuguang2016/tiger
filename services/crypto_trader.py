@@ -26,6 +26,10 @@ DEFAULT_CONFIG = {
     "mode": "paper",              # live / paper
     "scan_interval": 300,         # 扫描间隔（秒）
     "drop_pct": 15,               # 跌幅阈值 %
+    "min_platform_candles": 20,   # 平台底部最小 K 根数（4h 约 3.3 天）
+    "use_platform_bottom": True,   # 使用平台底部识别
+    "use_probe_confirm": True,    # 使用下探收涨确认
+    "use_exit_reversal": True,    # 使用出场反转信号
     "stop_loss_pct": 5,           # 固定止损比例 %（ATR 关闭时使用）
     "take_profit_1_pct": 8,       # 第一档止盈 %
     "take_profit_2_pct": 15,      # 第二档止盈 %
@@ -34,7 +38,7 @@ DEFAULT_CONFIG = {
     "max_positions": 5,           # 最大同时持仓数
     "kline_interval": "4h",       # K线周期
     "kline_limit": 100,           # K线根数
-    "paper_balance": 10000,       # 模拟盘初始资金 USDT
+    "paper_balance": 10000,      # 模拟盘初始资金 USDT
     "use_atr_stop": True,         # 使用 ATR 动态止损
     "use_trailing": True,         # 使用移动止损
     "use_multi_tf": True,         # 多时间框架过滤
@@ -207,8 +211,8 @@ class CryptoBot:
 
     def _analyze_signal(self, symbol: str) -> Optional[dict]:
         """
-        分析单个币种的价格行为信号 v2
-        使用统一 signal_engine + 右侧确认 + 多时间框架 + BTC 联动增强
+        分析单个币种的价格行为信号 v3
+        平台底部 + 下探收涨（与 A 股逻辑对齐）+ BTC/多周期
         """
         interval = self.config.get("kline_interval", "4h")
         limit = self.config.get("kline_limit", 100)
@@ -231,46 +235,70 @@ class CryptoBot:
         lows = df["low"].values
         volumes = df["volume"].values
 
+        use_platform = self.config.get("use_platform_bottom", True)
+        use_probe = self.config.get("use_probe_confirm", True)
+        min_platform = self.config.get("min_platform_candles", 20)
         drop_threshold = self.config.get("drop_pct", 15) / 100.0
-        high_period = max(highs[-60:]) if len(highs) >= 60 else max(highs)
-        current_close = closes[-1]
-        drop_pct = (high_period - current_close) / high_period
-        if drop_pct < drop_threshold:
-            return None
+
+        # 平台底部 或 跌幅回退
+        platform_info = {"platform_days": 0, "drop_from_high": 0, "score": 0, "tag": ""}
+        if use_platform:
+            has_platform, platform_info = sig.check_platform_bottom(
+                closes, lows, highs, min_platform_days=min_platform
+            )
+            if not has_platform:
+                high_60d = max(highs[-60:]) if len(highs) >= 60 else max(highs)
+                drop_pct = (high_60d - closes[-1]) / high_60d
+                if drop_pct < drop_threshold:
+                    return None
+                platform_info = {
+                    "platform_days": 0, "drop_from_high": round(drop_pct * 100, 1),
+                    "score": 0, "tag": "",
+                }
+        else:
+            high_period = max(highs[-60:]) if len(highs) >= 60 else max(highs)
+            drop_pct = (high_period - closes[-1]) / high_period
+            if drop_pct < drop_threshold:
+                return None
+            platform_info = {
+                "platform_days": 0, "drop_from_high": round(drop_pct * 100, 1),
+                "score": min(drop_pct / 0.4 * 10, 20), "tag": "",
+            }
+
+        # 下探收涨（核心买入信号）
+        probe_score, probe_tags = sig.check_probe_and_close_up(
+            opens, closes, highs, lows, volumes
+        )
+        if use_probe and probe_score < 8:
+            if platform_info.get("score", 0) < 12:
+                return None
 
         stabilized, stab_confidence = sig.check_stabilized(closes, lows, highs, volumes)
-        if not stabilized:
-            return None
-
         vol_spike, vol_ratio = sig.check_volume_spike(volumes)
-        if not vol_spike:
+        if not vol_spike and vol_ratio < 1.5:
             return None
 
         ma_score, ma_tags = sig.check_ma_support_crypto(closes)
         pattern_score, pattern_name = sig.check_kline_pattern(opens, closes, highs, lows)
-        reversal_score, reversal_tags = sig.check_reversal_confirmation(opens, closes, highs, lows, volumes)
 
         atr = sig.calculate_atr(highs, lows, closes, 14)
 
-        # BTC 联动 v2
         btc_score = self._check_btc_trend_v2()
-
-        # 多时间框架
         htf_score = 0
         if self.config.get("use_multi_tf", True) and symbol != "BTCUSDT":
             htf_score = self._check_htf(symbol)
 
-        result = sig.score_crypto_signal(
+        result = sig.score_crypto_signal_v3(
             opens, closes, highs, lows, volumes,
-            drop_pct=drop_pct,
+            platform_info=platform_info,
+            probe_score=probe_score,
+            probe_tags=probe_tags,
             stab_confidence=stab_confidence,
             vol_ratio=vol_ratio,
             ma_score=ma_score,
             ma_tags=ma_tags,
             pattern_score=pattern_score,
             pattern_name=pattern_name,
-            reversal_score=reversal_score,
-            reversal_tags=reversal_tags,
             btc_score=btc_score,
             htf_score=htf_score,
             min_score=40,
@@ -279,12 +307,16 @@ class CryptoBot:
         if result is None:
             return None
 
+        drop_display = platform_info.get("drop_from_high", 0)
+
         return {
             "symbol": symbol,
             "score": result["score"],
-            "drop_pct": round(drop_pct * 100, 1),
+            "drop_pct": drop_display if isinstance(drop_display, (int, float)) else round(
+                (max(highs[-60:]) - closes[-1]) / max(highs[-60:]) * 100, 1
+            ),
             "volume_ratio": vol_ratio,
-            "current_price": current_close,
+            "current_price": closes[-1],
             "stab_confidence": stab_confidence,
             "pattern": pattern_name,
             "ma_tags": ma_tags,
@@ -402,13 +434,16 @@ class CryptoBot:
                 logger.error("买入 %s 失败: %s", symbol, e)
 
     def _check_positions(self):
-        """检查所有持仓，执行 ATR 止损 / 移动止损 / 阶梯止盈"""
+        """检查所有持仓：出场反转 / ATR 止损 / 移动止损 / 阶梯止盈"""
         mode = self.config.get("mode", "paper")
         positions = self._paper_positions if mode == "paper" else self.positions
         use_atr = self.config.get("use_atr_stop", True)
         use_trailing = self.config.get("use_trailing", True)
+        use_reversal = self.config.get("use_exit_reversal", True)
 
         to_close = []
+        interval = self.config.get("kline_interval", "4h")
+
         for symbol, pos in list(positions.items()):
             current_price = self._get_price_safe(symbol)
             if current_price <= 0:
@@ -421,6 +456,33 @@ class CryptoBot:
             # 更新最高价追踪
             if current_price > pos.get("highest_price", entry_price):
                 pos["highest_price"] = current_price
+
+            # 出场反转信号（十字星+放量 / 长上影+放量 at 前高 / 上涨幅度收窄+压力）
+            if use_reversal:
+                try:
+                    raw = self.client.get_klines(symbol, interval, 30)
+                    if raw and len(raw) >= 10:
+                        opens = [float(k[1]) for k in raw]
+                        closes = [float(k[4]) for k in raw]
+                        highs = [float(k[2]) for k in raw]
+                        lows = [float(k[3]) for k in raw]
+                        volumes = [float(k[5]) for k in raw]
+                        recent_high = max(highs[-21:-1]) if len(highs) >= 21 else max(highs[:-1])
+                        triggered, reason = sig.check_exit_reversal_at_high(
+                            opens, closes, highs, lows, volumes, recent_high
+                        )
+                        if triggered and reason:
+                            to_close.append((symbol, pos["quantity"], reason))
+                            continue
+                        # 上涨幅度收窄、有上涨压力时也卖出
+                        triggered2, reason2 = sig.check_momentum_narrowing(
+                            opens, closes, highs, lows, volumes
+                        )
+                        if triggered2 and reason2:
+                            to_close.append((symbol, pos["quantity"], reason2))
+                            continue
+                except Exception as e:
+                    logger.debug("出场反转检查 %s 失败: %s", symbol, e)
 
             tp1_pct = self.config.get("take_profit_1_pct", 8)
             tp2_pct = self.config.get("take_profit_2_pct", 15)

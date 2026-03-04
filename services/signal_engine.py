@@ -557,3 +557,184 @@ def check_probe_and_close_up(opens, closes, highs, lows, volumes) -> Tuple[float
                 tags.append("底部抬升")
 
     return round(min(score, 25), 1), tags
+
+
+# ==================================================================
+# 出场反转信号（用户卖出逻辑）
+# ==================================================================
+
+def check_exit_reversal_signal(opens, closes, highs, lows, volumes) -> Tuple[bool, str]:
+    """
+    出场反转信号：十字星+放量 或 长上影+放量
+    用户逻辑：1) 十字星+放量 → 卖  2) 长上影+放量 at 前高 → 收盘<前高则卖
+    返回 (是否触发, 原因标签)
+    """
+    if len(closes) < 6 or len(volumes) < 6:
+        return False, ""
+
+    o, c, h, l = opens[-1], closes[-1], highs[-1], lows[-1]
+    body = abs(c - o)
+    total_range = h - l if h > l else 0.001
+    upper_shadow = h - max(o, c)
+    lower_shadow = min(o, c) - l
+
+    avg_vol_5 = sum(volumes[-6:-1]) / 5 if len(volumes) >= 6 else 0
+    if avg_vol_5 <= 0:
+        return False, ""
+    is_volume_spike = volumes[-1] > avg_vol_5 * 1.5
+
+    if not is_volume_spike:
+        return False, ""
+
+    # 十字星：实体很小（< 振幅 20%），有上下影线
+    body_ratio = body / total_range
+    if body_ratio < 0.2 and upper_shadow > 0 and lower_shadow > 0:
+        return True, "十字星放量"
+
+    # 长上影：上影线 >= 实体 2 倍，上影线占总振幅 >= 50%
+    if total_range > 0:
+        upper_ratio = upper_shadow / total_range
+        if upper_shadow > body * 2 and upper_ratio >= 0.5:
+            return True, "长上影放量"
+
+    return False, ""
+
+
+def check_exit_reversal_at_high(opens, closes, highs, lows, volumes, recent_high: float) -> Tuple[bool, str]:
+    """
+    长上影放量时，仅在收盘 < 前高 时卖出（用户逻辑：收盘高于前高则继续持有）
+    recent_high: 近期前高（如 20 根 K 线内的最高价）
+    """
+    triggered, reason = check_exit_reversal_signal(opens, closes, highs, lows, volumes)
+    if not triggered or reason != "长上影放量":
+        return triggered, reason
+    # 长上影时：收盘 >= 前高 → 突破前高，继续持有
+    if closes[-1] >= recent_high * 0.998:
+        return False, ""
+    return True, reason
+
+
+def check_momentum_narrowing(opens, closes, highs, lows, volumes) -> Tuple[bool, str]:
+    """
+    上涨幅度收窄、有上涨压力时卖出：
+    - 上涨幅度收窄：最近 3 根阳线实体递减，或最近 5 根涨幅 < 此前 5 根涨幅
+    - 有上涨压力：最新 K 线上影线占主导（上影 > 实体 2 倍），或放量收阴/十字星
+    至少满足「收窄」中一项 且 「压力」中一项
+    返回 (是否触发, 原因标签)
+    """
+    if len(closes) < 11 or len(volumes) < 6:
+        return False, ""
+
+    # 上涨幅度收窄
+    narrowing = False
+    # (a) 最近 3 根阳线实体递减
+    if len(closes) >= 3:
+        bodies = []
+        for i in range(-3, 0):
+            o, c = opens[i], closes[i]
+            if c > o:
+                bodies.append(c - o)
+        if len(bodies) == 3 and bodies[0] > bodies[1] > bodies[2] and bodies[2] > 0:
+            narrowing = True
+    # (b) 最近 5 根涨幅 < 此前 5 根涨幅（涨速放缓）
+    if not narrowing and len(closes) >= 11:
+        gain_recent = (closes[-1] / closes[-5] - 1) if closes[-5] > 0 else 0
+        gain_prev = (closes[-5] / closes[-10] - 1) if closes[-10] > 0 else 0
+        if gain_recent < gain_prev and gain_prev > 0.02:  # 此前有明显上涨，现在放缓
+            narrowing = True
+
+    if not narrowing:
+        return False, ""
+
+    # 有上涨压力
+    pressure = False
+    o, c, h, l = opens[-1], closes[-1], highs[-1], lows[-1]
+    body = abs(c - o)
+    total_range = h - l if h > l else 0.001
+    upper_shadow = h - max(o, c)
+    avg_vol_5 = sum(volumes[-6:-1]) / 5 if len(volumes) >= 6 else 0
+    is_volume_spike = avg_vol_5 > 0 and volumes[-1] > avg_vol_5 * 1.3
+
+    # (a) 上影线占主导：上影 > 实体 2 倍
+    if total_range > 0 and upper_shadow > body * 2 and upper_shadow / total_range >= 0.4:
+        pressure = True
+    # (b) 放量但收阴或十字星（高位抛压）
+    if not pressure and is_volume_spike and total_range > 0:
+        body_ratio = body / total_range
+        if c <= o or body_ratio < 0.3:  # 阴线或十字星
+            pressure = True
+
+    if pressure:
+        return True, "上涨收窄压力"
+    return False, ""
+
+
+# ==================================================================
+# 综合信号评分 v3（加密货币 - 平台底部 + 下探收涨）
+# ==================================================================
+
+def score_crypto_signal_v3(
+    opens, closes, highs, lows, volumes,
+    platform_info: Dict,
+    probe_score: float,
+    probe_tags: List[str],
+    stab_confidence: int,
+    vol_ratio: float,
+    ma_score: float,
+    ma_tags: List[str],
+    pattern_score: float,
+    pattern_name: str,
+    btc_score: float,
+    htf_score: float,
+    min_score: float = 40,
+) -> Optional[Dict]:
+    """
+    综合评分模型 v3（与 A 股 7 维对齐）
+    平台底部(20) + 下探收涨(25) + 企稳(10) + 量能(15) + 均线(10) + K线形态(10) + BTC/多周期(10)
+    """
+    score = 0.0
+    reasons = []
+    tags = list(ma_tags)
+
+    plat_score = min(platform_info.get("score", 0), 20)
+    score += plat_score
+    if platform_info.get("tag"):
+        tags.append(platform_info["tag"])
+    if platform_info.get("platform_days", 0) > 0:
+        reasons.append(f"平台{platform_info['platform_days']}根")
+    reasons.append(f"回落{platform_info.get('drop_from_high', 0)}%")
+
+    probe_capped = min(probe_score, 25)
+    score += probe_capped
+    tags.extend(probe_tags)
+    if probe_tags:
+        reasons.append("+".join(probe_tags))
+
+    stab_s = min(stab_confidence * 3.3, 10)
+    score += stab_s
+    reasons.append(f"企稳{stab_confidence}/3")
+
+    vol_s = min(max((vol_ratio - 1) * 6, 0), 15)
+    score += vol_s
+    reasons.append(f"量比{vol_ratio}")
+
+    ma_capped = min(ma_score, 10)
+    score += ma_capped
+
+    pattern_capped = min(pattern_score, 10)
+    score += pattern_capped
+    if pattern_name:
+        tags.append(pattern_name)
+        reasons.append(pattern_name)
+
+    btc_capped = max(min(btc_score, 10), -10)
+    score += btc_capped
+
+    htf_capped = max(min(htf_score, 10), -10)
+    score += htf_capped
+
+    score = round(max(min(score, 100), 0), 1)
+    if score < min_score:
+        return None
+
+    return {"score": score, "tags": tags, "reason": "; ".join(reasons)}

@@ -386,6 +386,26 @@
                         <input type="checkbox" id="crypto-multi-tf" checked>
                         <span class="param-label">多周期</span>
                     </label>
+                    <label class="param-group param-toggle">
+                        <input type="checkbox" id="crypto-platform-bottom" checked>
+                        <span class="param-label">平台底部</span>
+                    </label>
+                    <label class="param-group param-toggle">
+                        <input type="checkbox" id="crypto-probe-confirm" checked>
+                        <span class="param-label">下探确认</span>
+                    </label>
+                    <label class="param-group">
+                        <span class="param-label">底部K数</span>
+                        <select id="crypto-platform-candles">
+                            <option value="10">10根</option>
+                            <option value="20" selected>20根</option>
+                            <option value="30">30根</option>
+                        </select>
+                    </label>
+                    <label class="param-group param-toggle">
+                        <input type="checkbox" id="crypto-exit-reversal" checked>
+                        <span class="param-label">出场反转</span>
+                    </label>
                 </div>
                 <div class="crypto-actions">
                     <button id="btn-start-bot" class="btn-bot-start">启动机器人</button>
