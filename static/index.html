@@ -292,6 +292,104 @@
                     </div>
                 </div>
             </section>
+
+            <!-- 策略回测 -->
+            <section class="stock-backtest-section">
+                <div class="backtest-header">
+                    <h3 class="backtest-title">策略回测</h3>
+                    <span class="backtest-hint">买入：选股默认条件；卖出：数字货币策略（出场反转/止损/移动止损）</span>
+                </div>
+                <div class="backtest-controls">
+                    <label class="param-group">
+                        <span class="param-label">回测天数</span>
+                        <select id="stock-bt-days">
+                            <option value="90">90天</option>
+                            <option value="180" selected>180天</option>
+                            <option value="365">1年</option>
+                        </select>
+                    </label>
+                    <label class="param-group">
+                        <span class="param-label">初始资金</span>
+                        <select id="stock-bt-capital">
+                            <option value="100000" selected>10万</option>
+                            <option value="500000">50万</option>
+                            <option value="1000000">100万</option>
+                        </select>
+                    </label>
+                    <label class="param-group">
+                        <span class="param-label">止损</span>
+                        <select id="stock-bt-stop-loss">
+                            <option value="3">-3%</option>
+                            <option value="5" selected>-5%</option>
+                            <option value="8">-8%</option>
+                        </select>
+                    </label>
+                    <label class="param-group">
+                        <span class="param-label">单仓</span>
+                        <select id="stock-bt-max-pos-pct">
+                            <option value="5">5%</option>
+                            <option value="10" selected>10%</option>
+                            <option value="15">15%</option>
+                            <option value="20">20%</option>
+                        </select>
+                    </label>
+                    <label class="param-group">
+                        <span class="param-label">持仓数</span>
+                        <select id="stock-bt-max-positions">
+                            <option value="3">3只</option>
+                            <option value="5" selected>5只</option>
+                            <option value="8">8只</option>
+                        </select>
+                    </label>
+                    <button id="btn-run-stock-backtest" class="btn-run-backtest">运行回测</button>
+                </div>
+                <div id="stock-bt-progress" class="backtest-progress" style="display:none;">
+                    <div class="progress-bar-track">
+                        <div id="stock-bt-progress-fill" class="progress-bar-fill" style="width:0%"></div>
+                    </div>
+                    <span id="stock-bt-progress-text" class="progress-text">准备中...</span>
+                </div>
+                <div id="stock-bt-results" class="backtest-results" style="display:none;">
+                    <div class="bt-metrics-grid">
+                        <div class="bt-metric-card">
+                            <span class="bt-metric-label">总收益</span>
+                            <span id="stock-bt-total-return" class="bt-metric-value">--</span>
+                        </div>
+                        <div class="bt-metric-card">
+                            <span class="bt-metric-label">年化收益</span>
+                            <span id="stock-bt-annual-return" class="bt-metric-value">--</span>
+                        </div>
+                        <div class="bt-metric-card">
+                            <span class="bt-metric-label">胜率</span>
+                            <span id="stock-bt-win-rate" class="bt-metric-value">--</span>
+                        </div>
+                        <div class="bt-metric-card">
+                            <span class="bt-metric-label">最大回撤</span>
+                            <span id="stock-bt-max-dd" class="bt-metric-value">--</span>
+                        </div>
+                        <div class="bt-metric-card">
+                            <span class="bt-metric-label">盈亏比</span>
+                            <span id="stock-bt-profit-factor" class="bt-metric-value">--</span>
+                        </div>
+                        <div class="bt-metric-card">
+                            <span class="bt-metric-label">交易笔数</span>
+                            <span id="stock-bt-trade-count" class="bt-metric-value">--</span>
+                        </div>
+                        <div class="bt-metric-card">
+                            <span class="bt-metric-label">最终资金</span>
+                            <span id="stock-bt-final-bal" class="bt-metric-value">--</span>
+                        </div>
+                    </div>
+                    <div class="bt-equity-chart-wrap">
+                        <h4 class="bt-section-title">资金曲线</h4>
+                        <div id="stock-bt-equity-chart" class="bt-equity-chart"></div>
+                    </div>
+                    <div class="bt-trades-wrap">
+                        <h4 class="bt-section-title">交易明细 <span id="stock-bt-trades-count" class="bt-trades-count"></span></h4>
+                        <div id="stock-bt-trades-table" class="bt-trades-table"></div>
+                    </div>
+                </div>
+            </section>
         </div>
 
         <!-- ====== 页面3：数字货币 ====== -->

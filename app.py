@@ -13,6 +13,8 @@ from services.analyzer import analyze_trading_style
 from services.screener import start_screening, get_screening_status, fetch_index_info
 from services.crypto_trader import get_bot
 from services.crypto_backtest import start_backtest, get_backtest_status
+from services.stock_backtest import start_backtest as start_stock_backtest
+from services.stock_backtest import get_backtest_status as get_stock_backtest_status
 from services.binance_client import BinanceClient
 from services import database as db
 
@@ -404,6 +406,30 @@ def backtest_history_api():
     limit = request.args.get('limit', 20, type=int)
     runs = db.get_backtest_history(limit=limit)
     return jsonify({'success': True, 'runs': runs})
+
+
+@app.route('/api/stock/backtest/run', methods=['POST'])
+def run_stock_backtest_api():
+    """启动个人选股策略回测"""
+    params = request.get_json(silent=True) or {}
+    run_id = start_stock_backtest(params)
+    return jsonify({'success': True, 'run_id': run_id})
+
+
+@app.route('/api/stock/backtest/status')
+def stock_backtest_status_api():
+    """选股回测进度和结果"""
+    status = get_stock_backtest_status()
+    return jsonify({
+        'success': True,
+        'status': status['status'],
+        'progress': status['progress'],
+        'total': status['total'],
+        'message': status['message'],
+        'summary': status.get('summary', {}),
+        'equity': status.get('equity', []),
+        'trades': status.get('trades', []),
+    })
 
 
 @app.route('/api/crypto/backtest/<run_id>')

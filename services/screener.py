@@ -254,6 +254,46 @@ def _fetch_all_stocks_snapshot() -> Optional[pd.DataFrame]:
 # Stage 2: 逐股多维度分析
 # ============================
 
+def _build_snapshot_from_kline(kline_df: pd.DataFrame) -> pd.Series:
+    """从 K 线最后一行构建模拟 snapshot_row，用于回测"""
+    closes = kline_df["close"].values
+    volumes = kline_df["volume"].values
+    change_pct = (closes[-1] / closes[-2] - 1) * 100 if len(closes) >= 2 else 0
+    vol_ratio = 1.2
+    if len(volumes) >= 23:
+        avg_20 = np.mean(volumes[-23:-3])
+        vol_ratio = volumes[-1] / avg_20 if avg_20 > 0 else 1.2
+    return pd.Series({
+        "close": closes[-1], "change_pct": change_pct,
+        "volume_ratio": round(vol_ratio, 2),
+    })
+
+
+def analyze_candidate_for_backtest(
+    code: str,
+    name: str,
+    kline_df: pd.DataFrame,
+    index_kline: Optional[pd.DataFrame],
+    market_score: float,
+    market_env: str,
+    drop_threshold: float,
+    ma_filter: str,
+    min_platform_days: int = 1,
+    use_probe_confirm: bool = True,
+) -> Optional[Dict]:
+    """
+    回测用：对单只股票进行多维度技术分析，使用已获取的 K 线（不拉取实时数据）
+    """
+    if kline_df is None or len(kline_df) < 30:
+        return None
+    snapshot_row = _build_snapshot_from_kline(kline_df)
+    return _analyze_candidate(
+        code, name, snapshot_row, index_kline, market_score, market_env,
+        drop_threshold, ma_filter, min_platform_days, use_probe_confirm,
+        kline_df=kline_df,
+    )
+
+
 def _analyze_candidate(
     code: str,
     name: str,
@@ -265,14 +305,17 @@ def _analyze_candidate(
     ma_filter: str,
     min_platform_days: int = 1,
     use_probe_confirm: bool = True,
+    kline_df: Optional[pd.DataFrame] = None,
 ) -> Optional[Dict]:
     """
     对单只股票进行多维度技术分析 v3
     评分维度（7维）：
       平台底部质量(20) + 下探收涨信号(25) + 企稳质量(10) +
       量能配合(15) + 均线位置(10) + K线形态(10) + 大盘环境(10)
+    kline_df: 可选，回测时传入，不传则拉取实时
     """
-    kline_df = _fetch_stock_kline(code, days=90)
+    if kline_df is None:
+        kline_df = _fetch_stock_kline(code, days=90)
     if kline_df is None or len(kline_df) < 30:
         return None
 

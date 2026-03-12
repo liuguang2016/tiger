@@ -102,12 +102,19 @@ def _fetch_today_snapshot(stock_code: str) -> Optional[Dict]:
         return None
 
 
+def _fetch_from_eastmoney_by_secid(secid: str, start_str: str, end_str: str) -> Optional[pd.DataFrame]:
+    """按 secid 获取 K 线（用于上证指数 1.000001）"""
+    return _fetch_eastmoney_kline_impl(secid, start_str, end_str)
+
+
 def _fetch_from_eastmoney(stock_code: str, start_str: str, end_str: str) -> Optional[pd.DataFrame]:
-    """
-    直接调用东方财富 HTTP API 获取 K 线数据
-    绕过 akshare，自行控制请求头和超时
-    """
+    """直接调用东方财富 HTTP API 获取 K 线数据"""
     secid = _get_eastmoney_secid(stock_code)
+    return _fetch_eastmoney_kline_impl(secid, start_str, end_str)
+
+
+def _fetch_eastmoney_kline_impl(secid: str, start_str: str, end_str: str) -> Optional[pd.DataFrame]:
+    """东方财富 K 线 API 实现"""
     url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
     params = {
         "secid": secid,
@@ -407,6 +414,42 @@ def fetch_kline_data(
 def fetch_today_snapshot(stock_code: str) -> Optional[Dict]:
     """获取当日实时行情快照，供其他模块调用"""
     return _fetch_today_snapshot(stock_code)
+
+
+def fetch_stock_kline_range(stock_code: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
+    """
+    获取指定日期范围内的日K线，用于回测（不含当日实时补充）
+    start_date/end_date: YYYY-MM-DD
+    """
+    start_str = start_date.replace("-", "")
+    end_str = end_date.replace("-", "")
+    try:
+        df = _fetch_with_fallback(stock_code, start_str, end_str)
+        if df is None or df.empty:
+            return None
+        df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+        for col in ['open', 'close', 'high', 'low', 'volume']:
+            df[col] = df[col].astype(float)
+        return df.sort_values('date').drop_duplicates(subset='date').reset_index(drop=True)
+    except Exception:
+        return None
+
+
+def fetch_index_kline_range(start_date: str, end_date: str) -> Optional[pd.DataFrame]:
+    """获取上证指数指定日期范围内K线（secid=1.000001）"""
+    start_str = start_date.replace("-", "")
+    end_str = end_date.replace("-", "")
+    try:
+        df = _fetch_from_eastmoney_by_secid("1.000001", start_str, end_str)
+        if df is None:
+            return None
+        df = df.copy()
+        df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+        for col in ['open', 'close', 'high', 'low', 'volume']:
+            df[col] = df[col].astype(float)
+        return df.sort_values('date').drop_duplicates(subset='date').reset_index(drop=True)
+    except Exception:
+        return None
 
 
 def clear_cache():

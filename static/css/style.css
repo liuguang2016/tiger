@@ -1698,6 +1698,7 @@ body {
 /* ============================
    回测面板
    ============================ */
+.stock-backtest-section,
 .backtest-section {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);

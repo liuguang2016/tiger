@@ -837,9 +837,12 @@ function renderSummary(summary) {
 // 个人选股页面
 // ============================
 
+let stockBtEquityChartInstance = null;
+
 function initStockPick() {
     document.getElementById('btn-start-screen').addEventListener('click', startScreening);
     document.getElementById('btn-clear-pool').addEventListener('click', clearPool);
+    document.getElementById('btn-run-stock-backtest').addEventListener('click', runStockBacktest);
     loadPoolStocks();
     loadIndexInfo();
 }
@@ -2076,6 +2079,188 @@ function _renderBacktestTrades(trades) {
         </tr>`;
     });
 
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+// ============================
+// 个人选股策略回测
+// ============================
+
+let _stockBtPollTimer = null;
+
+async function runStockBacktest() {
+    const btn = document.getElementById('btn-run-stock-backtest');
+    btn.disabled = true;
+    btn.textContent = '回测中...';
+    document.getElementById('stock-bt-progress').style.display = 'flex';
+    document.getElementById('stock-bt-results').style.display = 'none';
+
+    const params = {
+        days: parseInt(document.getElementById('stock-bt-days').value),
+        initial_capital: parseInt(document.getElementById('stock-bt-capital').value),
+        stop_loss_pct: parseInt(document.getElementById('stock-bt-stop-loss').value),
+        max_position_pct: parseInt(document.getElementById('stock-bt-max-pos-pct').value),
+        max_positions: parseInt(document.getElementById('stock-bt-max-positions').value),
+        drop_pct: 15,
+        ma_filter: 'none',
+        min_platform_days: 1,
+        use_probe_confirm: true,
+        use_atr_stop: true,
+        use_trailing: true,
+        use_exit_reversal: true,
+    };
+
+    try {
+        const resp = await fetch('/api/stock/backtest/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.message || '启动失败');
+        _pollStockBacktestStatus();
+    } catch (err) {
+        document.getElementById('stock-bt-progress-text').textContent = '启动失败: ' + err.message;
+        btn.disabled = false;
+        btn.textContent = '运行回测';
+    }
+}
+
+function _pollStockBacktestStatus() {
+    if (_stockBtPollTimer) clearTimeout(_stockBtPollTimer);
+    _stockBtPollTimer = setTimeout(async () => {
+        try {
+            const resp = await fetch('/api/stock/backtest/status');
+            const data = await resp.json();
+            document.getElementById('stock-bt-progress-fill').style.width = (data.progress || 0) + '%';
+            document.getElementById('stock-bt-progress-text').textContent = data.message || '';
+
+            if (data.status === 'done') {
+                document.getElementById('btn-run-stock-backtest').disabled = false;
+                document.getElementById('btn-run-stock-backtest').textContent = '运行回测';
+                _renderStockBacktestResults(data);
+                return;
+            }
+            if (data.status === 'error') {
+                document.getElementById('btn-run-stock-backtest').disabled = false;
+                document.getElementById('btn-run-stock-backtest').textContent = '运行回测';
+                return;
+            }
+            _pollStockBacktestStatus();
+        } catch (err) {
+            document.getElementById('stock-bt-progress-text').textContent = '轮询失败: ' + err.message;
+            _pollStockBacktestStatus();
+        }
+    }, 2000);
+}
+
+function _renderStockBacktestResults(data) {
+    const results = document.getElementById('stock-bt-results');
+    results.style.display = 'block';
+    const s = data.summary || {};
+
+    const setVal = (id, val, isPct) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (isPct && typeof val === 'number' && !isNaN(val)) {
+            el.className = 'bt-metric-value ' + (val >= 0 ? 'profit' : 'loss');
+            el.textContent = (val >= 0 ? '+' : '') + val + '%';
+        } else {
+            el.textContent = val != null && val !== '' ? val : '--';
+        }
+    };
+    setVal('stock-bt-total-return', s.total_return_pct, true);
+    setVal('stock-bt-annual-return', s.annualized_return_pct, true);
+    setVal('stock-bt-win-rate', (s.win_rate || 0) + '%');
+    setVal('stock-bt-max-dd', '-' + (s.max_drawdown_pct || 0) + '%');
+    setVal('stock-bt-profit-factor', s.profit_factor);
+    setVal('stock-bt-trade-count', `${s.total_trades || 0} (${s.wins || 0}W/${s.losses || 0}L)`);
+    setVal('stock-bt-final-bal', (s.final_balance || 0).toLocaleString() + ' 元');
+
+    _renderStockEquityCurve(data.equity || []);
+    _renderStockBacktestTrades(data.trades || []);
+    results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function _renderStockEquityCurve(equity) {
+    const container = document.getElementById('stock-bt-equity-chart');
+    if (!container) return;
+    if (stockBtEquityChartInstance) stockBtEquityChartInstance.dispose();
+    if (typeof echarts === 'undefined') {
+        container.innerHTML = '<p style="color:#6e7681;text-align:center;padding:40px;">ECharts 未加载</p>';
+        return;
+    }
+    stockBtEquityChartInstance = echarts.init(container, 'dark');
+    window.addEventListener('resize', () => { if (stockBtEquityChartInstance) stockBtEquityChartInstance.resize(); });
+
+    if (!equity || equity.length === 0) {
+        container.innerHTML = '<p style="color:#6e7681;text-align:center;padding:40px;">无资金曲线数据</p>';
+        return;
+    }
+    const dates = equity.map(e => e.date);
+    const values = equity.map(e => e.equity);
+    const initial = values[0] || 100000;
+
+    stockBtEquityChartInstance.setOption({
+        backgroundColor: 'transparent',
+        tooltip: {
+            trigger: 'axis',
+            formatter: p => `${p[0].axisValue}<br/>资金: ${Number(p[0].value).toLocaleString()} 元`,
+        },
+        grid: { left: '10%', right: '4%', top: '8%', bottom: '12%' },
+        xAxis: {
+            type: 'category', data: dates,
+            axisLabel: { color: '#8b949e', fontSize: 10 },
+            axisLine: { lineStyle: { color: '#30363d' } },
+        },
+        yAxis: {
+            type: 'value', scale: true,
+            axisLabel: { color: '#8b949e', fontSize: 10 },
+            splitLine: { lineStyle: { color: '#21262d' } },
+        },
+        series: [{
+            type: 'line', data: values, smooth: true, showSymbol: false,
+            lineStyle: { width: 2, color: '#58a6ff' },
+            areaStyle: { color: 'rgba(88, 166, 255, 0.08)' },
+            markLine: {
+                silent: true, symbol: 'none',
+                data: [{ yAxis: initial, lineStyle: { color: '#6e7681', type: 'dashed', width: 1 } }],
+                label: { formatter: '初始资金', color: '#6e7681', fontSize: 10 },
+            },
+        }],
+    });
+}
+
+function _renderStockBacktestTrades(trades) {
+    const container = document.getElementById('stock-bt-trades-table');
+    const countEl = document.getElementById('stock-bt-trades-count');
+    if (countEl) countEl.textContent = `(${trades.length})`;
+
+    if (!trades || trades.length === 0) {
+        container.innerHTML = '<p style="color:#6e7681;text-align:center;padding:20px;">无交易记录</p>';
+        return;
+    }
+    let html = `<table class="bt-table">
+        <thead><tr>
+            <th>股票</th><th>入场时间</th><th>入场价</th>
+            <th>出场时间</th><th>出场价</th><th>盈亏</th><th>收益%</th><th>原因</th>
+        </tr></thead><tbody>`;
+    trades.forEach(t => {
+        const pnlCls = t.pnl >= 0 ? 'profit' : 'loss';
+        const pnlSign = t.pnl >= 0 ? '+' : '';
+        const name = t.stock_name ? `${t.stock_name} ${t.symbol}` : t.symbol;
+        html += `<tr>
+            <td class="bt-td-symbol">${name}</td>
+            <td>${t.entry_time}</td>
+            <td>${t.entry_price}</td>
+            <td>${t.exit_time}</td>
+            <td>${t.exit_price}</td>
+            <td class="${pnlCls}">${pnlSign}${t.pnl.toFixed(2)}</td>
+            <td class="${pnlCls}">${pnlSign}${t.pnl_pct}%</td>
+            <td>${t.exit_reason}</td>
+        </tr>`;
+    });
     html += '</tbody></table>';
     container.innerHTML = html;
 }
