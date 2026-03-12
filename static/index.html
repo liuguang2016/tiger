@@ -297,9 +297,16 @@
             <section class="stock-backtest-section">
                 <div class="backtest-header">
                     <h3 class="backtest-title">策略回测</h3>
-                    <span class="backtest-hint">买入：选股默认条件；卖出：数字货币策略（出场反转/止损/移动止损）</span>
+                    <span class="backtest-hint">买入：选股默认条件；卖出：数字货币策略。可选交易池或全A股(成交额前800)回测</span>
                 </div>
                 <div class="backtest-controls">
+                    <label class="param-group">
+                        <span class="param-label">股票范围</span>
+                        <select id="stock-bt-universe">
+                            <option value="pool" selected>交易池股票</option>
+                            <option value="all">全A股(成交额前800)</option>
+                        </select>
+                    </label>
                     <label class="param-group">
                         <span class="param-label">回测天数</span>
                         <select id="stock-bt-days">

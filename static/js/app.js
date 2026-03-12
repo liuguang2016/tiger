@@ -2097,6 +2097,7 @@ async function runStockBacktest() {
     document.getElementById('stock-bt-results').style.display = 'none';
 
     const params = {
+        universe: document.getElementById('stock-bt-universe').value,
         days: parseInt(document.getElementById('stock-bt-days').value),
         initial_capital: parseInt(document.getElementById('stock-bt-capital').value),
         stop_loss_pct: parseInt(document.getElementById('stock-bt-stop-loss').value),

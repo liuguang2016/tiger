@@ -112,13 +112,37 @@ def _run_backtest(run_id: str, params: dict):
         end_date = datetime.now().strftime("%Y-%m-%d")
         start_date = (datetime.now() - timedelta(days=days + 120)).strftime("%Y-%m-%d")
 
-        # 1) 获取股票列表：优先使用交易池，否则全A股需大量请求，这里简化为池
-        pool_stocks = db.get_pool_stocks()
-        if not pool_stocks:
-            _update_multi(status="error", message="请先在交易池中添加股票再运行回测")
-            return
+        universe = params.get("universe", "pool")  # pool | all
 
-        symbols = [(s["stock_code"], s["stock_name"]) for s in pool_stocks]
+        # 1) 获取股票列表
+        if universe == "pool":
+            pool_stocks = db.get_pool_stocks()
+            if not pool_stocks:
+                _update_multi(status="error", message="请先在交易池中添加股票再运行回测")
+                return
+            symbols = [(s["stock_code"], s["stock_name"]) for s in pool_stocks]
+        else:
+            # 全A股：拉取快照，过滤后取成交额靠前的股票（控制规模，避免过慢）
+            _update("message", "获取全A股列表...")
+            snapshot_df = screener._fetch_all_stocks_snapshot()
+            if snapshot_df is None or snapshot_df.empty:
+                _update_multi(status="error", message="获取全A股列表失败")
+                return
+            # 过滤：排除 ST、停牌、新股等，与选股 Stage1 类似
+            mask = (
+                (snapshot_df["volume"] > 0) &
+                (snapshot_df["turnover"] >= 0.5) &
+                (snapshot_df["change_pct"] >= -9.5) &
+                (snapshot_df["change_pct"] <= 9.5) &
+                (snapshot_df["total_mv"] >= 2e9)
+            )
+            df = snapshot_df[mask].copy()
+            df = df.sort_values("amount", ascending=False).head(800)  # 成交额前 800
+            symbols = [(str(row["code"]), str(row["name"])) for _, row in df.iterrows()]
+            if not symbols:
+                _update_multi(status="error", message="无符合条件的股票")
+                return
+
         _update_multi(total=len(symbols), message=f"拉取 {len(symbols)} 只股票K线...")
 
         # 2) 拉取各股及指数历史K线
