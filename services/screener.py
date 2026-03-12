@@ -629,7 +629,26 @@ def _fetch_stock_kline(code: str, days: int = 90) -> Optional[pd.DataFrame]:
                 "low": float(parts[4]),
                 "volume": float(parts[5]),
             })
-        return pd.DataFrame(rows)
+        df = pd.DataFrame(rows)
+        # 补充当日实时数据（历史 API 通常只到昨日）
+        try:
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            if not df.empty and df["date"].iloc[-1] < today_str and datetime.now().weekday() < 5:
+                from services.stock_data import fetch_today_snapshot
+                snap = fetch_today_snapshot(code)
+                if snap:
+                    new_row = pd.DataFrame([{
+                        "date": today_str,
+                        "open": snap["open"],
+                        "close": snap["close"],
+                        "high": snap["high"],
+                        "low": snap["low"],
+                        "volume": snap["volume"],
+                    }])
+                    df = pd.concat([df, new_row], ignore_index=True)
+        except Exception:
+            pass
+        return df
     except Exception as e:
         logger.debug("获取 %s K线失败: %s", code, e)
         return None

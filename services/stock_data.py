@@ -60,6 +60,48 @@ def _get_eastmoney_secid(stock_code: str) -> str:
         return f"0.{stock_code}"
 
 
+def _fetch_today_snapshot(stock_code: str) -> Optional[Dict]:
+    """
+    获取当日实时行情快照（东方财富 push2 API）
+    用于补充历史 K 线 API 不包含的当日数据
+    f43: 最新价, f44: 最高, f45: 最低, f46: 开盘, f47: 成交量(手)
+    价格需除以 100，成交量需乘以 100（手->股）
+    """
+    secid = _get_eastmoney_secid(stock_code)
+    url = "https://push2.eastmoney.com/api/qt/stock/get"
+    params = {
+        "secid": secid,
+        "fields": "f43,f44,f45,f46,f47",
+    }
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://quote.eastmoney.com/",
+    }
+    try:
+        _throttle()
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        d = data.get("data")
+        if not d or d.get("f43") is None:
+            return None
+        # 价格存为整数(分)，需除以100；成交量单位是手(100股)
+        open_p = (d.get("f46") or 0) / 100
+        high_p = (d.get("f44") or 0) / 100
+        low_p = (d.get("f45") or 0) / 100
+        close_p = (d.get("f43") or 0) / 100
+        vol = (d.get("f47") or 0) * 100
+        if open_p <= 0 or close_p <= 0:
+            return None
+        return {
+            "open": open_p, "high": high_p, "low": low_p,
+            "close": close_p, "volume": vol,
+        }
+    except Exception as e:
+        logger.debug("获取 %s 当日快照失败: %s", stock_code, e)
+        return None
+
+
 def _fetch_from_eastmoney(stock_code: str, start_str: str, end_str: str) -> Optional[pd.DataFrame]:
     """
     直接调用东方财富 HTTP API 获取 K 线数据
@@ -297,6 +339,23 @@ def fetch_kline_data(
         # 按日期排序去重
         df = df.sort_values('date').drop_duplicates(subset='date').reset_index(drop=True)
 
+        # 补充当日实时数据：历史 K 线 API 通常只到昨天，交易日可拉取当日快照
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        if df['date'].iloc[-1] < today_str and datetime.now().weekday() < 5:
+            snapshot = _fetch_today_snapshot(stock_code)
+            if snapshot:
+                new_row = pd.DataFrame([{
+                    'date': today_str,
+                    'open': snapshot['open'],
+                    'close': snapshot['close'],
+                    'high': snapshot['high'],
+                    'low': snapshot['low'],
+                    'volume': snapshot['volume'],
+                }])
+                df = pd.concat([df, new_row], ignore_index=True)
+                df = df.sort_values('date').reset_index(drop=True)
+                logger.info("已补充 %s 当日实时数据", stock_code)
+
         # 计算均线
         df['ma5'] = df['close'].rolling(window=5).mean()
         df['ma10'] = df['close'].rolling(window=10).mean()
@@ -343,6 +402,11 @@ def fetch_kline_data(
             'ma5': [], 'ma10': [], 'ma20': [], 'ma60': [],
             'message': f'获取 K 线数据失败：{str(e)}',
         }
+
+
+def fetch_today_snapshot(stock_code: str) -> Optional[Dict]:
+    """获取当日实时行情快照，供其他模块调用"""
+    return _fetch_today_snapshot(stock_code)
 
 
 def clear_cache():
