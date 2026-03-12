@@ -65,7 +65,7 @@ def _fetch_today_snapshot(stock_code: str) -> Optional[Dict]:
     获取当日实时行情快照（东方财富 push2 API）
     用于补充历史 K 线 API 不包含的当日数据
     f43: 最新价, f44: 最高, f45: 最低, f46: 开盘, f47: 成交量(手)
-    价格需除以 100，成交量需乘以 100（手->股）
+    价格需除以 100；成交量单位已是手，与历史 K 线 API 一致，不再转换
     """
     secid = _get_eastmoney_secid(stock_code)
     url = "https://push2.eastmoney.com/api/qt/stock/get"
@@ -85,12 +85,12 @@ def _fetch_today_snapshot(stock_code: str) -> Optional[Dict]:
         d = data.get("data")
         if not d or d.get("f43") is None:
             return None
-        # 价格存为整数(分)，需除以100；成交量单位是手(100股)
+        # 价格存为整数(分)，需除以100；f47 成交量单位已是手，与历史 K 线一致
         open_p = (d.get("f46") or 0) / 100
         high_p = (d.get("f44") or 0) / 100
         low_p = (d.get("f45") or 0) / 100
         close_p = (d.get("f43") or 0) / 100
-        vol = (d.get("f47") or 0) * 100
+        vol = float(d.get("f47") or 0)
         if open_p <= 0 or close_p <= 0:
             return None
         return {

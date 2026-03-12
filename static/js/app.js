@@ -1123,8 +1123,8 @@ function renderPoolKlineChart(data, stock) {
                         const d = p.data;
                         const color = d[1] >= d[0] ? '#f85149' : '#3fb950';
                         html += `<div style="color:${color}">开: ${d[0]} 收: ${d[1]}<br/>低: ${d[2]} 高: ${d[3]}</div>`;
-                    } else if (p.seriesName === '成交量') {
-                        html += `<div>成交量: ${formatVolume(p.data)}</div>`;
+                    } else if (p.seriesName === 'VOL') {
+                        html += `<div>VOL: ${formatVolume(p.data)}</div>`;
                     } else if (p.seriesName && p.seriesName.startsWith('MA') && p.data != null) {
                         html += `<div><span style="color:${p.color}">${p.seriesName}: ${p.data}</span></div>`;
                     }
@@ -1212,7 +1212,7 @@ function renderPoolKlineChart(data, stock) {
                 lineStyle: { width: 1, color: '#3fb950' },
             },
             {
-                name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1,
+                name: 'VOL', type: 'bar', xAxisIndex: 1, yAxisIndex: 1,
                 data: volumes,
                 itemStyle: {
                     color: function (params) {
@@ -1772,8 +1772,8 @@ function renderCryptoKlineChart(data) {
                         const d = p.data;
                         const color = d[1] >= d[0] ? '#f85149' : '#3fb950';
                         html += `<div style="color:${color}">O: ${d[0]} C: ${d[1]}<br/>L: ${d[2]} H: ${d[3]}</div>`;
-                    } else if (p.seriesName === '成交量') {
-                        html += `<div>Vol: ${Number(p.data).toLocaleString()}</div>`;
+                    } else if (p.seriesName === 'VOL') {
+                        html += `<div>VOL: ${Number(p.data).toLocaleString()}</div>`;
                     } else if (p.seriesName && p.seriesName.startsWith('MA') && p.data != null) {
                         html += `<div><span style="color:${p.color}">${p.seriesName}: ${p.data}</span></div>`;
                     }
@@ -1854,7 +1854,7 @@ function renderCryptoKlineChart(data) {
                 lineStyle: { width: 1, color: '#bc8cff' },
             },
             {
-                name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1,
+                name: 'VOL', type: 'bar', xAxisIndex: 1, yAxisIndex: 1,
                 data: volumes,
                 itemStyle: {
                     color: function (params) {

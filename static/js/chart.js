@@ -146,8 +146,8 @@ function renderKlineChart(data, tradeInfo) {
                         html += `开: ${d[0]} 收: ${d[1]}<br/>`;
                         html += `低: ${d[2]} 高: ${d[3]}`;
                         html += `</div>`;
-                    } else if (p.seriesName === '成交量') {
-                        html += `<div>成交量: ${formatVolume(p.data)}</div>`;
+                    } else if (p.seriesName === 'VOL') {
+                        html += `<div>VOL: ${formatVolume(p.data)}</div>`;
                     } else if (p.seriesName && p.seriesName.startsWith('MA') && p.data != null) {
                         html += `<div><span style="color:${p.color}">${p.seriesName}: ${p.data}</span></div>`;
                     }
@@ -317,9 +317,9 @@ function renderKlineChart(data, tradeInfo) {
                 showSymbol: false,
                 lineStyle: { width: 1, color: '#3fb950' },
             },
-            // 成交量
+            // VOL 成交量（手）
             {
-                name: '成交量',
+                name: 'VOL',
                 type: 'bar',
                 xAxisIndex: 1,
                 yAxisIndex: 1,
@@ -341,13 +341,13 @@ function renderKlineChart(data, tradeInfo) {
 }
 
 /**
- * 格式化成交量为易读格式
+ * 格式化成交量(VOL)为易读格式，单位：手（1手=100股）
  */
 function formatVolume(val) {
     if (val == null) return '-';
-    if (val >= 100000000) return (val / 100000000).toFixed(1) + '亿';
-    if (val >= 10000) return (val / 10000).toFixed(0) + '万';
-    return val.toString();
+    if (val >= 100000000) return (val / 100000000).toFixed(1) + '亿手';
+    if (val >= 10000) return (val / 10000).toFixed(0) + '万手';
+    return val.toString() + '手';
 }
 
 /**
