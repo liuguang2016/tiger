@@ -67,6 +67,8 @@
 
 ## 安装与运行
 
+**环境要求**：Python 3.9 或以上（akshare 依赖的 aiohttp 3.11.x 不支持 Python 3.8）。
+
 ```bash
 # 1. 安装依赖
 pip install -r requirements.txt
