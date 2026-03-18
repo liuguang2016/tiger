@@ -191,63 +191,87 @@ def _run_screening(task_id: str, params: dict):
 
 def _fetch_all_stocks_snapshot() -> Optional[pd.DataFrame]:
     """
-    调用东方财富行情接口，一次性获取全部 A 股实时数据
+    获取全部 A 股实时数据，优先 akshare（东财/新浪），东方财富直连失效时自动切换
     """
-    url = "https://push2.eastmoney.com/api/qt/clist/get"
-    all_rows = []
+    # 1. 优先 akshare 东财接口（与直连 push2 可能不同）
+    df = _fetch_all_stocks_snapshot_akshare_em()
+    if df is not None and not df.empty:
+        return df
 
-    for fs_code in ["m:0+t:6,m:0+t:80", "m:1+t:2,m:1+t:23"]:
-        page = 1
-        while True:
-            params = {
-                "pn": page,
-                "pz": 5000,
-                "po": 1,
-                "np": 1,
-                "fltt": 2,
-                "invt": 2,
-                "fid": "f3",
-                "fs": fs_code,
-                "fields": "f2,f3,f5,f6,f8,f10,f12,f14,f15,f16,f17,f20",
-            }
-            try:
-                resp = requests.get(url, params=params, headers=_HEADERS, timeout=20)
-                resp.raise_for_status()
-                data = resp.json()
-                items = data.get("data", {}).get("diff", [])
-                if not items:
-                    break
-                for item in items:
-                    if not isinstance(item, dict):
-                        continue
-                    close = item.get("f2", "-")
-                    if close == "-" or close is None:
-                        continue
-                    all_rows.append({
-                        "code": str(item.get("f12", "")),
-                        "name": item.get("f14", ""),
-                        "close": float(close) if close != "-" else 0,
-                        "change_pct": float(item.get("f3", 0) or 0),
-                        "volume": float(item.get("f5", 0) or 0),
-                        "amount": float(item.get("f6", 0) or 0),
-                        "turnover": float(item.get("f8", 0) or 0),
-                        "volume_ratio": float(item.get("f10", 0) or 0),
-                        "high": float(item.get("f15", 0) or 0),
-                        "low": float(item.get("f16", 0) or 0),
-                        "open": float(item.get("f17", 0) or 0),
-                        "total_mv": float(item.get("f20", 0) or 0),
-                    })
-                total_count = data.get("data", {}).get("total", 0)
-                if page * 5000 >= total_count:
-                    break
-                page += 1
-            except Exception as e:
-                logger.warning("获取股票列表失败 (fs=%s, page=%d): %s", fs_code, page, e)
-                break
+    # 2. 备选：akshare 新浪接口（缺 turnover/volume_ratio/total_mv 时用默认值）
+    df = _fetch_all_stocks_snapshot_akshare_sina()
+    if df is not None and not df.empty:
+        logger.info("使用新浪数据源获取A股快照（换手率/量比/市值为估计值）")
+        return df
 
-    if not all_rows:
+    return None
+
+
+def _fetch_all_stocks_snapshot_akshare_em() -> Optional[pd.DataFrame]:
+    """akshare 东方财富 - 沪深京 A 股实时行情"""
+    try:
+        import akshare as ak
+        df = ak.stock_zh_a_spot_em()
+        if df is None or df.empty:
+            return None
+        df = df.rename(columns={
+            "代码": "code",
+            "名称": "name",
+            "最新价": "close",
+            "涨跌幅": "change_pct",
+            "成交量": "volume",
+            "成交额": "amount",
+            "换手率": "turnover",
+            "量比": "volume_ratio",
+            "最高": "high",
+            "最低": "low",
+            "今开": "open",
+            "总市值": "total_mv",
+        })
+        df["code"] = df["code"].astype(str).str.zfill(6)
+        for col in ["turnover", "volume_ratio"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+        df["total_mv"] = pd.to_numeric(df["total_mv"], errors="coerce").fillna(0)
+        return df[["code", "name", "close", "change_pct", "volume", "amount",
+                   "turnover", "volume_ratio", "high", "low", "open", "total_mv"]].copy()
+    except Exception as e:
+        logger.warning("akshare stock_zh_a_spot_em 失败: %s", e)
         return None
-    return pd.DataFrame(all_rows)
+
+
+def _fetch_all_stocks_snapshot_akshare_sina() -> Optional[pd.DataFrame]:
+    """akshare 新浪 - 沪深京 A 股实时行情（无换手率/量比/总市值，用默认值）"""
+    try:
+        import akshare as ak
+        df = ak.stock_zh_a_spot()
+        if df is None or df.empty:
+            return None
+        # 新浪代码格式 sh600000/sz000001/bj430047，提取 6 位
+        df["code"] = df["代码"].astype(str).str.replace(
+            r"^(sh|sz|bj)", "", case=False, regex=True
+        ).str.zfill(6)
+        df = df.rename(columns={
+            "名称": "name",
+            "最新价": "close",
+            "涨跌幅": "change_pct",
+            "成交量": "volume",
+            "成交额": "amount",
+            "最高": "high",
+            "最低": "low",
+            "今开": "open",
+        })
+        # 成交量：新浪为股，转手（÷100）
+        df["volume"] = pd.to_numeric(df["volume"], errors="coerce").fillna(0) / 100
+        df["turnover"] = 1.0
+        df["volume_ratio"] = 1.0
+        # 150e9 使 mid(100~500亿)、all(<=500亿) 通过筛选；small(2~100亿) 会被排除
+        df["total_mv"] = 150e9
+        return df[["code", "name", "close", "change_pct", "volume", "amount",
+                   "turnover", "volume_ratio", "high", "low", "open", "total_mv"]].copy()
+    except Exception as e:
+        logger.warning("akshare stock_zh_a_spot (新浪) 失败: %s", e)
+        return None
 
 
 # ============================
@@ -637,118 +661,47 @@ def _evaluate_market_env(index_kline: Optional[pd.DataFrame]) -> Tuple[float, st
 # ============================
 
 def _fetch_stock_kline(code: str, days: int = 90) -> Optional[pd.DataFrame]:
-    """获取单只股票近N天K线"""
-    secid = f"1.{code}" if code.startswith("6") else f"0.{code}"
+    """获取单只股票近N天K线，优先东财直连，失败则 akshare"""
     end_str = datetime.now().strftime("%Y%m%d")
     start_str = (datetime.now() - timedelta(days=days + 30)).strftime("%Y%m%d")
 
-    url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
-    params = {
-        "secid": secid,
-        "fields1": "f1,f2,f3,f4,f5,f6",
-        "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
-        "klt": "101",
-        "fqt": "1",
-        "beg": start_str,
-        "end": end_str,
-        "ut": "7eea3edcaed734bea9004fcfb7d7c8c5",
-    }
-    try:
-        resp = requests.get(url, params=params, headers=_HEADERS, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        klines = data.get("data", {}).get("klines", [])
-        if not klines:
-            return None
-
-        rows = []
-        for line in klines:
-            parts = line.split(",")
-            rows.append({
-                "date": parts[0],
-                "open": float(parts[1]),
-                "close": float(parts[2]),
-                "high": float(parts[3]),
-                "low": float(parts[4]),
-                "volume": float(parts[5]),
-            })
-        df = pd.DataFrame(rows)
-        # 补充当日实时数据（历史 API 通常只到昨日）
-        try:
-            today_str = datetime.now().strftime("%Y-%m-%d")
-            if not df.empty and df["date"].iloc[-1] < today_str and datetime.now().weekday() < 5:
-                from services.stock_data import fetch_today_snapshot
-                snap = fetch_today_snapshot(code)
-                if snap:
-                    new_row = pd.DataFrame([{
-                        "date": today_str,
-                        "open": snap["open"],
-                        "close": snap["close"],
-                        "high": snap["high"],
-                        "low": snap["low"],
-                        "volume": snap["volume"],
-                    }])
-                    df = pd.concat([df, new_row], ignore_index=True)
-        except Exception:
-            pass
+    # 1. 东方财富直连
+    df = _fetch_stock_kline_eastmoney(code, start_str, end_str)
+    if df is not None and not df.empty:
+        df = _maybe_append_today_snapshot(df, code)
         return df
-    except Exception as e:
-        logger.debug("获取 %s K线失败: %s", code, e)
-        return None
 
-
-def _fetch_index_snapshot() -> dict:
-    """获取上证指数和深证成指实时快照"""
-    url = "https://push2.eastmoney.com/api/qt/ulist.np/get"
-    params = {
-        "fltt": 2,
-        "fields": "f2,f3,f4,f12,f14",
-        "secids": "1.000001,0.399001",
-    }
+    # 2. akshare 备选
     try:
-        resp = requests.get(url, params=params, headers=_HEADERS, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        items = data.get("data", {}).get("diff", [])
-
-        result = {}
-        for item in items:
-            code = item.get("f12", "")
-            if code == "000001":
-                result["sh_name"] = "上证指数"
-                result["sh_close"] = item.get("f2", 0)
-                result["sh_change_pct"] = item.get("f3", 0)
-                result["sh_change"] = item.get("f4", 0)
-            elif code == "399001":
-                result["sz_name"] = "深证成指"
-                result["sz_close"] = item.get("f2", 0)
-                result["sz_change_pct"] = item.get("f3", 0)
-                result["sz_change"] = item.get("f4", 0)
-        return result
+        import akshare as ak
+        adf = ak.stock_zh_a_hist(
+            symbol=code, period="daily",
+            start_date=start_str, end_date=end_str, adjust="qfq",
+        )
+        if adf is not None and not adf.empty:
+            df = adf.rename(columns={
+                "日期": "date", "开盘": "open", "收盘": "close",
+                "最高": "high", "最低": "low", "成交量": "volume",
+            })
+            df = df[["date", "open", "close", "high", "low", "volume"]].copy()
+            df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+            df = _maybe_append_today_snapshot(df, code)
+            return df
     except Exception as e:
-        logger.warning("获取指数快照失败: %s", e)
-        return {}
+        logger.debug("akshare K线 %s 失败: %s", code, e)
+    return None
 
 
-def _fetch_index_kline() -> Optional[pd.DataFrame]:
-    """获取上证指数近30日K线"""
-    return _fetch_stock_kline_by_secid("1.000001", days=30)
-
-
-def _fetch_stock_kline_by_secid(secid: str, days: int = 30) -> Optional[pd.DataFrame]:
-    """按 secid 获取K线"""
-    end_str = datetime.now().strftime("%Y%m%d")
-    start_str = (datetime.now() - timedelta(days=days + 10)).strftime("%Y%m%d")
-
+def _fetch_stock_kline_eastmoney(code: str, start_str: str, end_str: str) -> Optional[pd.DataFrame]:
+    """东财直连获取 K 线"""
+    secid = f"1.{code}" if code.startswith("6") else f"0.{code}"
     url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
     params = {
         "secid": secid,
         "fields1": "f1,f2,f3,f4,f5,f6",
         "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
-        "klt": "101",
-        "fqt": "1",
-        "beg": start_str,
-        "end": end_str,
+        "klt": "101", "fqt": "1",
+        "beg": start_str, "end": end_str,
         "ut": "7eea3edcaed734bea9004fcfb7d7c8c5",
     }
     try:
@@ -771,8 +724,146 @@ def _fetch_stock_kline_by_secid(secid: str, days: int = 30) -> Optional[pd.DataF
             })
         return pd.DataFrame(rows)
     except Exception as e:
-        logger.debug("获取指数K线失败: %s", e)
+        logger.debug("东财 K线 %s 失败: %s", code, e)
         return None
+
+
+def _maybe_append_today_snapshot(df: pd.DataFrame, code: str) -> pd.DataFrame:
+    """若为交易日且最后一条为昨日，尝试补充当日实时数据"""
+    try:
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        if not df.empty and df["date"].iloc[-1] < today_str and datetime.now().weekday() < 5:
+            from services.stock_data import fetch_today_snapshot
+            snap = fetch_today_snapshot(code)
+            if snap:
+                new_row = pd.DataFrame([{
+                    "date": today_str,
+                    "open": snap["open"],
+                    "close": snap["close"],
+                    "high": snap["high"],
+                    "low": snap["low"],
+                    "volume": snap["volume"],
+                }])
+                df = pd.concat([df, new_row], ignore_index=True)
+    except Exception:
+        pass
+    return df
+
+
+def _fetch_index_snapshot() -> dict:
+    """获取上证指数和深证成指实时快照，优先 akshare（东财/新浪）"""
+    result = _fetch_index_snapshot_akshare()
+    if result:
+        return result
+    return {}
+
+
+def _fetch_index_snapshot_akshare() -> dict:
+    """akshare 获取指数快照：先试东财，失败则用新浪"""
+    # 1. 新浪：一次返回所有指数，含 sh000001、sz399001
+    try:
+        import akshare as ak
+        df = ak.stock_zh_index_spot_sina()
+        if df is not None and not df.empty:
+            result = {}
+            codes = df["代码"].astype(str).str.lower()
+            sh = df[codes.isin(["sh000001", "000001"])]
+            sz = df[codes.isin(["sz399001", "399001"])]
+            if not sh.empty:
+                row = sh.iloc[0]
+                result["sh_name"] = "上证指数"
+                result["sh_close"] = float(row.get("最新价", 0) or 0)
+                result["sh_change_pct"] = float(row.get("涨跌幅", 0) or 0)
+                result["sh_change"] = float(row.get("涨跌额", 0) or 0)
+            if not sz.empty:
+                row = sz.iloc[0]
+                result["sz_name"] = "深证成指"
+                result["sz_close"] = float(row.get("最新价", 0) or 0)
+                result["sz_change_pct"] = float(row.get("涨跌幅", 0) or 0)
+                result["sz_change"] = float(row.get("涨跌额", 0) or 0)
+            if result:
+                return result
+    except Exception as e:
+        logger.warning("akshare 指数快照(新浪) 失败: %s", e)
+
+    # 2. 东财：分两次获取上证、深证
+    try:
+        import akshare as ak
+        result = {}
+        for symbol, code_key, name_key, name_val in [
+            ("上证系列指数", "000001", "sh", "上证指数"),
+            ("深证系列指数", "399001", "sz", "深证成指"),
+        ]:
+            df = ak.stock_zh_index_spot_em(symbol=symbol)
+            if df is not None and not df.empty:
+                row = df[df["代码"].astype(str) == code_key]
+                if not row.empty:
+                    r = row.iloc[0]
+                    result[f"{name_key}_name"] = name_val
+                    result[f"{name_key}_close"] = float(r.get("最新价", 0) or 0)
+                    result[f"{name_key}_change_pct"] = float(r.get("涨跌幅", 0) or 0)
+                    result[f"{name_key}_change"] = float(r.get("涨跌额", 0) or 0)
+        if result:
+            return result
+    except Exception as e:
+        logger.warning("akshare 指数快照(东财) 失败: %s", e)
+
+    return {}
+
+
+def _fetch_index_kline() -> Optional[pd.DataFrame]:
+    """获取上证指数近30日K线"""
+    return _fetch_stock_kline_by_secid("1.000001", days=30)
+
+
+def _fetch_stock_kline_by_secid(secid: str, days: int = 30) -> Optional[pd.DataFrame]:
+    """按 secid 获取K线（用于上证指数 1.000001 等），失败则 akshare"""
+    end_str = datetime.now().strftime("%Y%m%d")
+    start_str = (datetime.now() - timedelta(days=days + 10)).strftime("%Y%m%d")
+
+    url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+    params = {
+        "secid": secid,
+        "fields1": "f1,f2,f3,f4,f5,f6",
+        "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+        "klt": "101", "fqt": "1",
+        "beg": start_str, "end": end_str,
+        "ut": "7eea3edcaed734bea9004fcfb7d7c8c5",
+    }
+    try:
+        resp = requests.get(url, params=params, headers=_HEADERS, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        klines = data.get("data", {}).get("klines", [])
+        if klines:
+            rows = []
+            for line in klines:
+                parts = line.split(",")
+                rows.append({
+                    "date": parts[0],
+                    "open": float(parts[1]),
+                    "close": float(parts[2]),
+                    "high": float(parts[3]),
+                    "low": float(parts[4]),
+                    "volume": float(parts[5]),
+                })
+            return pd.DataFrame(rows)
+    except Exception as e:
+        logger.debug("东财指数K线失败: %s", e)
+
+    # akshare 备选：上证指数 1.000001 -> sh000001
+    if secid == "1.000001":
+        try:
+            import akshare as ak
+            adf = ak.stock_zh_index_daily_em(
+                symbol="sh000001", start_date=start_str, end_date=end_str,
+            )
+            if adf is not None and not adf.empty:
+                adf["date"] = pd.to_datetime(adf["date"]).dt.strftime("%Y-%m-%d")
+                return adf[["date", "open", "close", "high", "low", "volume"]].copy()
+        except Exception as e:
+            logger.debug("akshare 指数K线失败: %s", e)
+    return None
 
 
 # ============================
