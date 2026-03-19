@@ -93,7 +93,12 @@ export const useScreenerStore = defineStore('screener', () => {
     try {
       const res = await api.getPool()
       if (res.data.success) {
-        pool.value = res.data.stocks || []
+        // Normalize stock_code -> code, stock_name -> name for frontend compatibility
+        pool.value = (res.data.stocks || []).map(s => ({
+          ...s,
+          code: s.stock_code,
+          name: s.stock_name
+        }))
       }
     } catch (e) {
       console.error('Failed to fetch pool:', e)
