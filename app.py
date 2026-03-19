@@ -11,6 +11,7 @@ from services.matcher import match_trades
 from services.stock_data import fetch_kline_data
 from services.analyzer import analyze_trading_style
 from services.screener import start_screening, get_screening_status, fetch_index_info
+from services.strategy_loader import list_strategies, run_strategy
 from services.crypto_trader import get_bot
 from services.crypto_backtest import start_backtest, get_backtest_status
 from services.stock_backtest import start_backtest as start_stock_backtest
@@ -212,6 +213,32 @@ def clear_pool_api():
     """清空交易池"""
     db.clear_pool()
     return jsonify({'success': True})
+
+
+@app.route('/api/screener/strategies')
+def get_strategies():
+    """列举可用策略"""
+    strategies = list_strategies()
+    return jsonify({'success': True, 'strategies': strategies})
+
+
+@app.route('/api/screener/strategy/run', methods=['POST'])
+def run_strategy_api():
+    """执行指定策略选股"""
+    data = request.get_json(silent=True) or {}
+    strategy_id = (data.get('strategy_id') or '').strip()
+    if not strategy_id:
+        return jsonify({'success': False, 'message': '缺少 strategy_id'}), 400
+    try:
+        results = run_strategy(strategy_id)
+        db.save_pool_stocks(results)
+        return jsonify({'success': True, 'count': len(results)})
+    except FileNotFoundError as e:
+        return jsonify({'success': False, 'message': str(e)}), 404
+    except (ValueError, TypeError) as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 # ============================
