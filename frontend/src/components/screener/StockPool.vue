@@ -16,6 +16,18 @@ function formatPct(val) {
   if (val == null) return '-'
   return (val >= 0 ? '+' : '') + val.toFixed(2) + '%'
 }
+
+function getTagClass(tag) {
+  const tagMap = {
+    'pattern': 'pattern',
+    'ma': 'ma',
+    'signal': 'signal',
+    'confidence': 'confidence',
+    'probe': 'probe',
+    'platform': 'platform',
+  }
+  return tagMap[tag] || 'price'
+}
 </script>
 
 <template>
@@ -30,20 +42,30 @@ function formatPct(val) {
       <div
         v-for="stock in stocks"
         :key="stock.code"
-        class="pool-item"
+        class="pool-card"
         :class="{ active: currentStock?.code === stock.code }"
         @click="emit('select', stock)"
       >
-        <div class="pool-item-header">
-          <span class="stock-name">{{ stock.name }}</span>
-          <span class="stock-code">{{ stock.code }}</span>
-          <button class="btn-remove" @click.stop="emit('remove', stock.code)">×</button>
+        <div class="pool-card-header">
+          <div class="pool-card-name-wrap">
+            <span class="pool-card-name">{{ stock.name }}</span>
+            <span class="pool-card-code">{{ stock.code }}</span>
+          </div>
+          <span v-if="stock.score" class="pool-card-score">{{ stock.score.toFixed(1) }}</span>
         </div>
-        <div class="pool-item-info">
-          <span>回落 {{ stock.drop_pct?.toFixed(1) }}%</span>
-          <span>量比 {{ stock.vol_ratio?.toFixed(1) }}</span>
+        <div class="pool-card-tags">
+          <span class="pool-tag drop">回落 {{ stock.drop_pct?.toFixed(1) }}%</span>
+          <span class="pool-tag vol">量比 {{ stock.volume_ratio?.toFixed(1) }}</span>
+          <span
+            v-for="tag in (stock.tags || [])"
+            :key="tag"
+            class="pool-tag"
+            :class="getTagClass(tag)"
+          >{{ tag }}</span>
+          <span v-if="stock.pattern" class="pool-tag pattern">{{ stock.pattern }}</span>
         </div>
-        <div v-if="stock.reason" class="pool-item-reason">{{ stock.reason }}</div>
+        <div v-if="stock.reason" class="pool-card-reason">{{ stock.reason }}</div>
+        <button class="pool-card-remove" @click.stop="emit('remove', stock.code)">×</button>
       </div>
 
       <div v-if="!stocks.length" class="pool-empty">
@@ -75,29 +97,36 @@ function formatPct(val) {
 }
 
 .pool-title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .pool-count {
-  color: var(--accent-primary);
-  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--accent-danger, #f85149);
 }
 
 .btn-clear-pool {
+  padding: 4px 12px;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12px;
-  padding: 4px 12px;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
 }
 
 .btn-clear-pool:hover {
-  background: var(--accent-danger);
-  color: white;
-  border-color: var(--accent-danger);
+  color: var(--accent-danger, #f85149);
+  border-color: var(--accent-danger, #f85149);
 }
 
 .pool-list {
@@ -106,69 +135,148 @@ function formatPct(val) {
   padding: 8px;
 }
 
-.pool-item {
-  padding: 12px;
-  border-radius: var(--radius-sm);
+.pool-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.pool-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pool-list::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.pool-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--text-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.pool-empty-hint {
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+/* 交易池股票卡片 */
+.pool-card {
+  background: var(--bg-tertiary, #1c2128);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm, 8px);
+  padding: 12px 14px;
+  margin-bottom: 8px;
   cursor: pointer;
-  margin-bottom: 4px;
-  transition: all var(--transition-fast);
-  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  position: relative;
 }
 
-.pool-item:hover {
-  background: var(--bg-hover);
+.pool-card:hover {
+  background: var(--bg-hover, #252c35);
+  border-color: var(--accent-primary, #58a6ff);
 }
 
-.pool-item.active {
-  background: var(--bg-tertiary);
-  border-color: var(--accent-primary);
+.pool-card.active {
+  border-color: var(--accent-primary, #58a6ff);
+  background: rgba(88, 166, 255, 0.08);
 }
 
-.pool-item-header {
+.pool-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.pool-card-name-wrap {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: 6px;
 }
 
-.stock-name {
-  font-weight: 500;
+.pool-card-name {
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
-.stock-code {
-  font-size: 12px;
+.pool-card-code {
+  font-size: 11px;
   color: var(--text-muted);
-  font-family: var(--font-mono);
 }
 
-.btn-remove {
-  margin-left: auto;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  color: var(--text-muted);
-  font-size: 16px;
+.pool-card-score {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-yellow, #d29922);
+}
+
+.pool-card-tags {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition-fast);
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.btn-remove:hover {
-  background: var(--accent-danger);
-  color: white;
+.pool-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
 }
 
-.pool-item-info {
-  display: flex;
-  gap: 12px;
-  font-size: 12px;
+.pool-tag.drop {
+  color: var(--color-green, #3fb950);
+  background: rgba(63, 185, 80, 0.1);
+}
+
+.pool-tag.vol {
+  color: var(--accent-danger, #f85149);
+  background: rgba(248, 81, 73, 0.1);
+}
+
+.pool-tag.price {
   color: var(--text-secondary);
+  background: rgba(139, 148, 158, 0.1);
 }
 
-.pool-item-reason {
-  margin-top: 4px;
+.pool-tag.pattern {
+  color: var(--color-yellow, #d29922);
+  background: rgba(210, 153, 34, 0.15);
+}
+
+.pool-tag.ma {
+  color: var(--accent-primary, #58a6ff);
+  background: rgba(88, 166, 255, 0.12);
+}
+
+.pool-tag.signal {
+  color: var(--color-purple, #bc8cff);
+  background: rgba(188, 140, 255, 0.12);
+}
+
+.pool-tag.confidence {
+  color: var(--color-orange, #db6d28);
+  background: rgba(219, 109, 40, 0.12);
+}
+
+.pool-tag.probe {
+  color: #f0883e;
+  background: rgba(240, 136, 62, 0.15);
+  font-weight: 600;
+}
+
+.pool-tag.platform {
+  color: #a371f7;
+  background: rgba(163, 113, 247, 0.12);
+}
+
+.pool-card-reason {
+  margin-top: 6px;
   font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;
@@ -176,14 +284,30 @@ function formatPct(val) {
   text-overflow: ellipsis;
 }
 
-.pool-empty {
-  text-align: center;
-  padding: 40px;
+.pool-card-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
   color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 50%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
 }
 
-.pool-empty-hint {
-  font-size: 12px;
-  margin-top: 8px;
+.pool-card:hover .pool-card-remove {
+  display: flex;
+}
+
+.pool-card-remove:hover {
+  background: var(--accent-danger, #f85149);
+  color: white;
 }
 </style>
