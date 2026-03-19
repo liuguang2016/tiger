@@ -70,13 +70,18 @@
 **环境要求**：Python 3.9 或以上（akshare 依赖的 aiohttp 3.11.x 不支持 Python 3.8）。
 
 ```bash
-# 1. 安装依赖
+# 1. 创建并激活虚拟环境
+python3 -m venv venv
+source venv/bin/activate   # Linux/macOS
+# Windows: venv\Scripts\activate
+
+# 2. 安装依赖
 pip install -r requirements.txt
 
-# 2. 启动应用
+# 3. 启动应用
 python app.py
 
-# 3. 打开浏览器访问
+# 4. 打开浏览器访问
 # http://127.0.0.1:5000
 ```
 

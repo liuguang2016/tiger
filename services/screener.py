@@ -751,16 +751,35 @@ def _maybe_append_today_snapshot(df: pd.DataFrame, code: str) -> pd.DataFrame:
 
 
 def _fetch_index_snapshot() -> dict:
-    """获取上证指数和深证成指实时快照，优先 akshare（东财/新浪）"""
+    """获取上证指数、深证成指、创业板指实时快照，优先 akshare（东财/新浪）"""
     result = _fetch_index_snapshot_akshare()
     if result:
-        return result
+        # 转换为前端期望的格式
+        return _convert_index_format(result)
     return {}
 
 
+def _convert_index_format(raw: dict) -> dict:
+    """将原始指数数据转换为前端期望的格式"""
+    return {
+        "sh": {
+            "value": raw.get("sh_close", 0),
+            "change": raw.get("sh_change_pct", 0)
+        },
+        "sz": {
+            "value": raw.get("sz_close", 0),
+            "change": raw.get("sz_change_pct", 0)
+        },
+        "cyb": {
+            "value": raw.get("cyb_close", 0),
+            "change": raw.get("cyb_change_pct", 0)
+        }
+    }
+
+
 def _fetch_index_snapshot_akshare() -> dict:
-    """akshare 获取指数快照：先试东财，失败则用新浪"""
-    # 1. 新浪：一次返回所有指数，含 sh000001、sz399001
+    """akshare 获取指数快照：上证、深证、创业板指，先试新浪，失败则用东财"""
+    # 1. 新浪：一次返回所有指数，含 sh000001、sz399001、sz399006（创业板）
     try:
         import akshare as ak
         df = ak.stock_zh_index_spot_sina()
@@ -769,6 +788,7 @@ def _fetch_index_snapshot_akshare() -> dict:
             codes = df["代码"].astype(str).str.lower()
             sh = df[codes.isin(["sh000001", "000001"])]
             sz = df[codes.isin(["sz399001", "399001"])]
+            cyb = df[codes.isin(["sz399006", "399006"])]  # 创业板指
             if not sh.empty:
                 row = sh.iloc[0]
                 result["sh_name"] = "上证指数"
@@ -781,18 +801,25 @@ def _fetch_index_snapshot_akshare() -> dict:
                 result["sz_close"] = float(row.get("最新价", 0) or 0)
                 result["sz_change_pct"] = float(row.get("涨跌幅", 0) or 0)
                 result["sz_change"] = float(row.get("涨跌额", 0) or 0)
+            if not cyb.empty:
+                row = cyb.iloc[0]
+                result["cyb_name"] = "创业板指"
+                result["cyb_close"] = float(row.get("最新价", 0) or 0)
+                result["cyb_change_pct"] = float(row.get("涨跌幅", 0) or 0)
+                result["cyb_change"] = float(row.get("涨跌额", 0) or 0)
             if result:
                 return result
     except Exception as e:
         logger.warning("akshare 指数快照(新浪) 失败: %s", e)
 
-    # 2. 东财：分两次获取上证、深证
+    # 2. 东财：分三次获取上证、深证、创业板
     try:
         import akshare as ak
         result = {}
         for symbol, code_key, name_key, name_val in [
             ("上证系列指数", "000001", "sh", "上证指数"),
             ("深证系列指数", "399001", "sz", "深证成指"),
+            ("深证系列指数", "399006", "cyb", "创业板指"),
         ]:
             df = ak.stock_zh_index_spot_em(symbol=symbol)
             if df is not None and not df.empty:

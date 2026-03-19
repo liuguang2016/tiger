@@ -314,8 +314,8 @@ def fetch_kline_data(
         buy_dt = datetime.strptime(buy_date, '%Y-%m-%d')
         sell_dt = datetime.strptime(sell_date, '%Y-%m-%d')
 
-        # 多取 90 天用于 MA60 计算预热
-        start_dt = buy_dt - timedelta(days=before_days + 90)
+        # 多取 120 天用于 MA99 计算预热
+        start_dt = buy_dt - timedelta(days=before_days + 120)
         end_dt = sell_dt + timedelta(days=after_days)
 
         start_str = start_dt.strftime('%Y%m%d')
@@ -333,7 +333,7 @@ def fetch_kline_data(
             return {
                 'success': False, 'stock_code': stock_code,
                 'dates': [], 'ohlcv': [], 'volumes': [],
-                'ma5': [], 'ma10': [], 'ma20': [], 'ma60': [],
+                'ma7': [], 'ma25': [], 'ma99': [],
                 'message': f'未获取到 {stock_code} 的 K 线数据',
             }
 
@@ -364,10 +364,9 @@ def fetch_kline_data(
                 logger.info("已补充 %s 当日实时数据", stock_code)
 
         # 计算均线
-        df['ma5'] = df['close'].rolling(window=5).mean()
-        df['ma10'] = df['close'].rolling(window=10).mean()
-        df['ma20'] = df['close'].rolling(window=20).mean()
-        df['ma60'] = df['close'].rolling(window=60).mean()
+        df['ma7'] = df['close'].rolling(window=7).mean()
+        df['ma25'] = df['close'].rolling(window=25).mean()
+        df['ma99'] = df['close'].rolling(window=99).mean()
 
         # 裁剪到需要的显示范围（去掉均线预热的数据）
         display_start = (buy_dt - timedelta(days=before_days)).strftime('%Y-%m-%d')
@@ -378,7 +377,7 @@ def fetch_kline_data(
             return {
                 'success': False, 'stock_code': stock_code,
                 'dates': [], 'ohlcv': [], 'volumes': [],
-                'ma5': [], 'ma10': [], 'ma20': [], 'ma60': [],
+                'ma7': [], 'ma25': [], 'ma99': [],
                 'message': f'{stock_code} 在指定时间范围内无交易数据',
             }
 
@@ -387,15 +386,14 @@ def fetch_kline_data(
         ohlcv = df[['open', 'close', 'low', 'high']].round(2).values.tolist()
         volumes = df['volume'].tolist()
 
-        ma5 = [round(v, 2) if pd.notna(v) else None for v in df['ma5'].tolist()]
-        ma10 = [round(v, 2) if pd.notna(v) else None for v in df['ma10'].tolist()]
-        ma20 = [round(v, 2) if pd.notna(v) else None for v in df['ma20'].tolist()]
-        ma60 = [round(v, 2) if pd.notna(v) else None for v in df['ma60'].tolist()]
+        ma7 = [round(v, 2) if pd.notna(v) else None for v in df['ma7'].tolist()]
+        ma25 = [round(v, 2) if pd.notna(v) else None for v in df['ma25'].tolist()]
+        ma99 = [round(v, 2) if pd.notna(v) else None for v in df['ma99'].tolist()]
 
         result = {
             'success': True, 'stock_code': stock_code,
             'dates': dates, 'ohlcv': ohlcv, 'volumes': volumes,
-            'ma5': ma5, 'ma10': ma10, 'ma20': ma20, 'ma60': ma60,
+            'ma7': ma7, 'ma25': ma25, 'ma99': ma99,
             'message': f'获取到 {len(dates)} 条 K 线数据',
         }
 
@@ -406,7 +404,7 @@ def fetch_kline_data(
         return {
             'success': False, 'stock_code': stock_code,
             'dates': [], 'ohlcv': [], 'volumes': [],
-            'ma5': [], 'ma10': [], 'ma20': [], 'ma60': [],
+            'ma7': [], 'ma25': [], 'ma99': [],
             'message': f'获取 K 线数据失败：{str(e)}',
         }
 
