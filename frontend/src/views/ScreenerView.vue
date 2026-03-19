@@ -23,6 +23,7 @@ async function handleSelectStock(stock) {
 onMounted(() => {
   store.fetchIndex()
   store.fetchPool()
+  store.fetchStrategies()
 })
 
 onUnmounted(() => {
@@ -36,6 +37,10 @@ onUnmounted(() => {
     <IndexBar :index-info="store.indexInfo" />
 
     <ScreenerControls
+      :mode="store.mode"
+      :strategies="store.strategies"
+      :selected-strategy-id="store.selectedStrategyId"
+      :strategy-loading="store.strategyLoading"
       :params="store.params"
       :status="store.status"
       :progress="store.progress"
@@ -50,6 +55,9 @@ onUnmounted(() => {
       @bt-start="store.startBacktest"
       @param-change="handleParamChange"
       @bt-param-change="handleBtParamChange"
+      @mode-change="store.mode = $event"
+      @strategy-change="store.selectedStrategyId = $event"
+      @strategy-run="store.runStrategyScreening"
     />
 
     <div class="pool-section">

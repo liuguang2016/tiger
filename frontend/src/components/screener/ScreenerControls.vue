@@ -2,6 +2,22 @@
 import { computed } from 'vue'
 
 const props = defineProps({
+  mode: {
+    type: String,
+    default: 'param'
+  },
+  strategies: {
+    type: Array,
+    default: () => []
+  },
+  selectedStrategyId: {
+    type: String,
+    default: ''
+  },
+  strategyLoading: {
+    type: Boolean,
+    default: false
+  },
   params: {
     type: Object,
     required: true
@@ -40,7 +56,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['start', 'stop', 'bt-start', 'bt-param-change', 'param-change'])
+const emit = defineEmits(['start', 'stop', 'bt-start', 'bt-param-change', 'param-change', 'mode-change', 'strategy-change', 'strategy-run'])
 
 const isRunning = computed(() => props.status === 'running')
 const isBtRunning = computed(() => props.btStatus === 'running')
@@ -57,8 +73,28 @@ function updateBtParam(key, value) {
 <template>
   <div class="screener-controls">
     <section class="screening-section">
-      <h3 class="section-title">筛选参数</h3>
-      <div class="params-grid">
+      <div class="mode-switch">
+        <button
+          type="button"
+          class="mode-btn"
+          :class="{ active: mode === 'param' }"
+          @click="emit('mode-change', 'param')"
+        >
+          参数筛选
+        </button>
+        <button
+          type="button"
+          class="mode-btn"
+          :class="{ active: mode === 'strategy' }"
+          @click="emit('mode-change', 'strategy')"
+        >
+          策略选股
+        </button>
+      </div>
+
+      <template v-if="mode === 'param'">
+        <h3 class="section-title">筛选参数</h3>
+        <div class="params-grid">
         <label class="param-group">
           <span class="param-label">回落幅度</span>
           <select :value="params.dropPct" @change="updateParam('dropPct', $event.target.value)">
@@ -126,6 +162,31 @@ function updateBtParam(key, value) {
         </div>
         <span class="progress-text">{{ message }} ({{ found }} 只)</span>
       </div>
+      </template>
+
+      <template v-else>
+        <h3 class="section-title">策略选股</h3>
+        <div class="strategy-row">
+          <label class="param-group">
+            <span class="param-label">策略</span>
+            <select
+              :value="selectedStrategyId"
+              :disabled="!strategies.length"
+              @change="emit('strategy-change', $event.target.value)"
+            >
+              <option value="">-- 选择策略 --</option>
+              <option v-for="s in strategies" :key="s.id" :value="s.id">{{ s.name }}</option>
+            </select>
+          </label>
+          <button
+            class="btn-screen"
+            :disabled="strategyLoading || !selectedStrategyId"
+            @click="emit('strategy-run')"
+          >
+            {{ strategyLoading ? '运行中...' : '运行策略' }}
+          </button>
+        </div>
+      </template>
     </section>
 
     <section class="backtest-section">
@@ -233,6 +294,45 @@ function updateBtParam(key, value) {
   flex-direction: column;
   gap: 24px;
   margin-bottom: 24px;
+}
+
+.mode-switch {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.mode-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.mode-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+}
+
+.mode-btn.active {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+}
+
+.strategy-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.strategy-row .param-group {
+  min-width: 180px;
 }
 
 .section-title {

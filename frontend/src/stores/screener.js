@@ -23,6 +23,12 @@ export const useScreenerStore = defineStore('screener', () => {
   const backtestResults = ref(null)
   const backtestPolling = ref(null)
 
+  // 选股模式：param=参数筛选，strategy=策略选股
+  const mode = ref('param')
+  const strategies = ref([])
+  const selectedStrategyId = ref('')
+  const strategyLoading = ref(false)
+
   const params = ref({
     dropPct: 15,
     platformDays: 1,
@@ -86,6 +92,35 @@ export const useScreenerStore = defineStore('screener', () => {
     if (polling.value) {
       clearInterval(polling.value)
       polling.value = null
+    }
+  }
+
+  async function fetchStrategies() {
+    try {
+      const res = await api.listStrategies()
+      if (res.data.success && res.data.strategies?.length) {
+        strategies.value = res.data.strategies
+        if (!selectedStrategyId.value && strategies.value[0]) {
+          selectedStrategyId.value = strategies.value[0].id
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch strategies:', e)
+    }
+  }
+
+  async function runStrategyScreening() {
+    if (!selectedStrategyId.value) return
+    strategyLoading.value = true
+    try {
+      const res = await api.runStrategy(selectedStrategyId.value)
+      if (res.data.success) {
+        await fetchPool()
+      }
+    } catch (e) {
+      console.error('Strategy run failed:', e)
+    } finally {
+      strategyLoading.value = false
     }
   }
 
@@ -198,6 +233,12 @@ export const useScreenerStore = defineStore('screener', () => {
   }
 
   return {
+    mode,
+    strategies,
+    selectedStrategyId,
+    strategyLoading,
+    fetchStrategies,
+    runStrategyScreening,
     status,
     progress,
     total,

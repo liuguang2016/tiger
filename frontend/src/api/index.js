@@ -53,6 +53,14 @@ export const clearPool = () => {
   return api.delete('/screener/pool')
 }
 
+export const listStrategies = () => {
+  return api.get('/screener/strategies')
+}
+
+export const runStrategy = (strategyId) => {
+  return api.post('/screener/strategy/run', { strategy_id: strategyId })
+}
+
 // 数字货币 API
 export const getCryptoConfig = () => {
   return api.get('/crypto/config')
