@@ -5,7 +5,8 @@
       "Bash(curl:*)",
       "Bash(cd /home/liuguang/tigger/frontend && npm run build 2>&1 | tail -30)",
       "Bash(git push:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
