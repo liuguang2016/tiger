@@ -6,14 +6,13 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from strategies.touch_bottom_rebound import (
-    _fetch_all_snapshot, _fetch_kline, _append_today_if_needed, _check_conditions,
-)
+from services.screener import fetch_snapshot_for_strategies, fetch_kline_for_strategies
+from strategies.touch_bottom_rebound import _append_today_if_needed, _check_conditions
 
 def main():
     codes = ["300482", "920187", "920626"]
-    print("获取全A股快照...")
-    snapshot = _fetch_all_snapshot()
+    print("获取全A股快照(复用参数选股数据源)...")
+    snapshot = fetch_snapshot_for_strategies()
     if snapshot is None:
         print("快照获取失败")
         return
@@ -29,7 +28,7 @@ def main():
         if row["change_pct"] <= 0:
             print("  -> 不满足条件3(涨跌幅>0%)")
             continue
-        kline = _fetch_kline(code)
+        kline = fetch_kline_for_strategies(code, days=90)
         if kline is None:
             print("  K线获取失败")
             continue

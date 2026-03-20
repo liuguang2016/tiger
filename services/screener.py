@@ -83,6 +83,26 @@ def fetch_index_info() -> dict:
         return {}
 
 
+def fetch_snapshot_for_strategies() -> Optional[pd.DataFrame]:
+    """
+    供策略选股使用：获取全A股实时行情，与参数选股相同数据源
+    返回列: code, name, close, change_pct, open, high, low
+    """
+    df = _fetch_all_stocks_snapshot()
+    if df is None or df.empty:
+        return None
+    cols = ["code", "name", "close", "change_pct", "open", "high", "low"]
+    return df[[c for c in cols if c in df.columns]].copy()
+
+
+def fetch_kline_for_strategies(code: str, days: int = 90) -> Optional[pd.DataFrame]:
+    """
+    供策略选股使用：获取单只股票K线，与参数选股相同数据源（含当日补充）
+    返回列: date, open, close, high, low, volume
+    """
+    return _fetch_stock_kline(code, days=days)
+
+
 # ============================
 # 筛选主流程（后台线程）
 # ============================

@@ -4,14 +4,18 @@
 1. 行情收盘价低位且行情收盘价上移
 2. 近3个交易日的区间涨跌幅>0%且<=5%
 3. 涨跌幅>0%
+
+数据获取复用参数选股的 screener 模块，保证数据源一致。
 """
 
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 
 import pandas as pd
+
+from services.screener import fetch_snapshot_for_strategies, fetch_kline_for_strategies
 
 NAME = "触底反弹"
 
@@ -26,75 +30,6 @@ _REQUEST_INTERVAL = 0.35
 
 # 同花顺结果校验：策略应能筛出这些股票
 VERIFY_CODES = frozenset({"300482", "920187", "920626"})
-
-
-def _fetch_all_snapshot() -> Optional[pd.DataFrame]:
-    """获取全A股实时行情。东财失败时自动切换到新浪"""
-    import akshare as ak
-
-    def _normalize(df: pd.DataFrame) -> pd.DataFrame:
-        df["change_pct"] = pd.to_numeric(df["change_pct"], errors="coerce").fillna(0)
-        df["high"] = pd.to_numeric(df.get("high", df["close"]), errors="coerce").fillna(df["close"])
-        df["low"] = pd.to_numeric(df.get("low", df["close"]), errors="coerce").fillna(df["close"])
-        df["open"] = pd.to_numeric(df.get("open", df["close"]), errors="coerce").fillna(df["close"])
-        return df[["code", "name", "close", "change_pct", "open", "high", "low"]].copy()
-
-    # 1. 优先东财
-    for attempt in range(2):
-        try:
-            df = ak.stock_zh_a_spot_em()
-            if df is not None and not df.empty:
-                df = df.rename(columns={
-                    "代码": "code", "名称": "name", "最新价": "close",
-                    "涨跌幅": "change_pct", "最高": "high", "最低": "low", "今开": "open",
-                })
-                df["code"] = df["code"].astype(str).str.zfill(6)
-                return _normalize(df)
-        except Exception as e:
-            logger.warning("东财快照失败(尝试%d): %s", attempt + 1, e)
-            if attempt < 1:
-                time.sleep(2)
-
-    # 2. 备选新浪
-    try:
-        df = ak.stock_zh_a_spot()
-        if df is not None and not df.empty:
-            df["code"] = df["代码"].astype(str).str.replace(
-                r"^(sh|sz|bj)", "", case=False, regex=True
-            ).str.zfill(6)
-            df = df.rename(columns={
-                "名称": "name", "最新价": "close", "涨跌幅": "change_pct",
-                "最高": "high", "最低": "low", "今开": "open",
-            })
-            logger.info("使用新浪数据源获取A股快照")
-            return _normalize(df)
-    except Exception as e:
-        logger.warning("新浪快照失败: %s", e)
-
-    return None
-
-
-def _fetch_kline(code: str, days: int = 80, adjust: str = "") -> Optional[pd.DataFrame]:
-    """获取单只股票K线。同花顺行情选股多用不复权(行情价)"""
-    end_str = datetime.now().strftime("%Y%m%d")
-    start_str = (datetime.now() - timedelta(days=days + 15)).strftime("%Y%m%d")
-    try:
-        import akshare as ak
-        df = ak.stock_zh_a_hist(
-            symbol=code, period="daily",
-            start_date=start_str, end_date=end_str, adjust=adjust,
-        )
-        if df is None or df.empty or len(df) < 5:
-            return None
-        df = df.rename(columns={
-            "日期": "date", "开盘": "open", "收盘": "close",
-            "最高": "high", "最低": "low", "成交量": "volume",
-        })
-        df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
-        return df[["date", "open", "close", "high", "low", "volume"]].copy()
-    except Exception as e:
-        logger.debug("K线 %s 失败: %s", code, e)
-        return None
 
 
 def _append_today_if_needed(
@@ -127,9 +62,9 @@ def _check_conditions(
     """
     检查触底反弹三条件（与同花顺逻辑对齐）
     """
-    if df is None or len(df) < 5:
+    if df is None or len(df) < 4:
         if code in VERIFY_CODES:
-            logger.info("[%s] 条件: K线不足", code)
+            logger.info("[%s] 条件: K线不足(需至少4根)", code)
         return False, ""
 
     closes = df["close"].values
@@ -177,8 +112,9 @@ def _check_conditions(
 def run() -> List[Dict]:
     """
     触底反弹选股：满足三条件的股票列表
+    数据获取复用参数选股的 screener 模块
     """
-    snapshot = _fetch_all_snapshot()
+    snapshot = fetch_snapshot_for_strategies()
     if snapshot is None or snapshot.empty:
         return []
 
@@ -197,8 +133,8 @@ def run() -> List[Dict]:
 
         if i > 0:
             time.sleep(_REQUEST_INTERVAL)
-        kline = _fetch_kline(code)
-        if kline is not None:
+        kline = fetch_kline_for_strategies(code, days=90)
+        if kline is not None and len(kline) >= 4:
             kline = _append_today_if_needed(kline, code, row)
         ok, reason = _check_conditions(
             kline, float(row["change_pct"]), code=code
