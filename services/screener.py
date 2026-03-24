@@ -42,6 +42,17 @@ _HEADERS = {
 }
 
 # ============================
+# 全A股快照缓存（兜底）
+# ============================
+_SNAPSHOT_CACHE_LOCK = threading.Lock()
+_SNAPSHOT_CACHE: Dict[str, object] = {
+    "df": None,   # Optional[pd.DataFrame]
+    "ts": 0.0,    # last update time
+    "source": "", # data source name for debug
+}
+_SNAPSHOT_CACHE_TTL_SEC = 30 * 60  # 30分钟：避免数据源短时封禁/波动导致“筛选结果为0”
+
+# ============================
 # 公共接口
 # ============================
 
@@ -213,17 +224,46 @@ def _fetch_all_stocks_snapshot() -> Optional[pd.DataFrame]:
     """
     获取全部 A 股实时数据，优先 akshare（东财/新浪），东方财富直连失效时自动切换
     """
-    # 1. 优先 akshare 东财接口（与直连 push2 可能不同）
-    df = _fetch_all_stocks_snapshot_akshare_em()
-    if df is not None and not df.empty:
-        return df
+    max_rounds = 3
+    last_err: Optional[str] = None
 
-    # 2. 备选：akshare 新浪接口（缺 turnover/volume_ratio/total_mv 时用默认值）
-    df = _fetch_all_stocks_snapshot_akshare_sina()
-    if df is not None and not df.empty:
-        logger.info("使用新浪数据源获取A股快照（换手率/量比/市值为估计值）")
-        return df
+    for round_idx in range(max_rounds):
+        # 1. 优先 akshare 东财接口（与直连 push2 可能不同）
+        df = _fetch_all_stocks_snapshot_akshare_em()
+        if df is not None and not df.empty:
+            with _SNAPSHOT_CACHE_LOCK:
+                _SNAPSHOT_CACHE["df"] = df.copy()
+                _SNAPSHOT_CACHE["ts"] = time.time()
+                _SNAPSHOT_CACHE["source"] = "akshare_em"
+            return df
 
+        # 2. 备选：akshare 新浪接口（缺 turnover/volume_ratio/total_mv 时用默认值）
+        df = _fetch_all_stocks_snapshot_akshare_sina()
+        if df is not None and not df.empty:
+            logger.info("使用新浪数据源获取A股快照（换手率/量比/市值为估计值）")
+            with _SNAPSHOT_CACHE_LOCK:
+                _SNAPSHOT_CACHE["df"] = df.copy()
+                _SNAPSHOT_CACHE["ts"] = time.time()
+                _SNAPSHOT_CACHE["source"] = "akshare_sina"
+            return df
+
+        last_err = "akshare快照连续失败（可能被限流/返回HTML）"
+        delay = min(2 ** round_idx, 8)  # 1s/2s/4s/8s
+        if round_idx < max_rounds - 1:
+            logger.warning("全A股快照获取失败，等待 %ss 后重试（第 %d/%d）", delay, round_idx + 1, max_rounds)
+            time.sleep(delay)
+
+    # 最后兜底：返回最近一次成功结果，避免筛选结果为0
+    with _SNAPSHOT_CACHE_LOCK:
+        cache_df = _SNAPSHOT_CACHE.get("df")  # type: ignore[assignment]
+        cache_ts = float(_SNAPSHOT_CACHE.get("ts") or 0.0)  # type: ignore[arg-type]
+        cache_source = str(_SNAPSHOT_CACHE.get("source") or "")
+
+    if cache_df is not None and cache_ts > 0 and (time.time() - cache_ts) <= _SNAPSHOT_CACHE_TTL_SEC:
+        logger.warning("使用缓存A股快照兜底（source=%s，缓存未过期）", cache_source)
+        return cache_df.copy()
+
+    logger.warning("全A股快照获取失败且缓存不可用：%s", last_err)
     return None
 
 

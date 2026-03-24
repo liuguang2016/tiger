@@ -6,7 +6,17 @@
       "Bash(cd /home/liuguang/tigger/frontend && npm run build 2>&1 | tail -30)",
       "Bash(git push:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(python app.py)",
+      "Bash(pip install:*)",
+      "Bash(claude --version 2>/dev/null || echo \"claude not found in PATH\")",
+      "Bash(claude --check-for-update 2>&1 || npm info @anthropic-ai/claude-code version 2>/dev/null)",
+      "Bash(npm list:*)",
+      "Bash(npm update:*)",
+      "Bash(claude --version)",
+      "Bash(pip show:*)",
+      "Read(//root/.claude/plugins/**)",
+      "Bash(claude plugins:*)"
     ]
   }
 }
