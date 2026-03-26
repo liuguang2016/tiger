@@ -16,7 +16,13 @@
       "Bash(claude --version)",
       "Bash(pip show:*)",
       "Read(//root/.claude/plugins/**)",
-      "Bash(claude plugins:*)"
+      "Bash(claude plugins:*)",
+      "Bash(.specify/scripts/bash/create-new-feature.sh \"@doc/fastapi_migration_plan.md 按文档的要求重构这个项目的后端\" --json --short-name \"fastapi-migration\" \"FastAPI migration for backend refactoring\")",
+      "Bash(.specify/scripts/bash/check-prerequisites.sh --json 2>/dev/null)",
+      "Bash(.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks 2>/dev/null)",
+      "Bash(timeout 5 python -c \"from main import app; print\\(''FastAPI app loaded successfully''\\)\")",
+      "Read(//usr/bin/**)",
+      "Bash(/home/liuguang/tigger/venv/bin/pip install:*)"
     ]
   }
 }

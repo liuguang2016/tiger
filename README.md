@@ -76,13 +76,19 @@ source venv/bin/activate   # Linux/macOS
 # Windows: venv\Scripts\activate
 
 # 2. 安装依赖
+cd backend
 pip install -r requirements.txt
+cd ..
 
-# 3. 启动应用
-python app.py
+# 3. 启动应用 (FastAPI)
+cd backend
+uvicorn main:app --reload --port 8002
 
 # 4. 打开浏览器访问
-# http://127.0.0.1:5000
+# http://127.0.0.1:8002
+
+# 5. API 文档 (自动生成)
+# http://127.0.0.1:8002/docs
 ```
 
 ## 交割单 CSV 格式
@@ -115,29 +121,37 @@ python app.py
 
 ```
 tigger/
-├── app.py                      # Flask 主应用，API 路由
-├── requirements.txt            # Python 依赖
-├── services/
-│   ├── parser.py               # 交割单 CSV 解析
-│   ├── matcher.py              # 买卖配对与盈亏计算
-│   ├── analyzer.py             # 交易风格分析
-│   ├── stock_data.py           # A 股 K 线数据获取
-│   ├── database.py             # SQLite 数据存储
-│   ├── screener.py             # 弹簧反弹选股引擎
-│   ├── binance_client.py       # Binance REST API 封装
-│   ├── crypto_trader.py        # 数字货币交易机器人
-│   └── crypto_backtest.py      # 策略历史回测引擎
-└── static/
-    ├── index.html              # 前端页面
-    ├── css/style.css           # 样式
-    └── js/
-        ├── app.js              # 前端交互逻辑
-        └── chart.js            # K 线图渲染
+├── backend/                     # 后端代码
+│   ├── main.py                 # FastAPI 主应用入口
+│   ├── app.py                  # Flask 主应用（迁移后保留对比）
+│   ├── api/                    # API 路由模块
+│   │   ├── response.py        # 响应格式化工具
+│   │   └── routes/
+│   │       ├── trades.py      # 交割单分析路由
+│   │       ├── screener.py    # 选股路由
+│   │       ├── crypto.py      # 数字货币路由
+│   │       └── backtest.py    # 回测路由
+│   ├── requirements.txt        # Python 依赖
+│   ├── services/               # 业务逻辑
+│   │   ├── parser.py          # 交割单 CSV 解析
+│   │   ├── matcher.py         # 买卖配对与盈亏计算
+│   │   ├── analyzer.py         # 交易风格分析
+│   │   ├── stock_data.py      # A 股 K 线数据获取
+│   │   ├── database.py         # SQLite 数据存储
+│   │   ├── screener.py         # 弹簧反弹选股引擎
+│   │   ├── binance_client.py   # Binance REST API 封装
+│   │   ├── crypto_trader.py     # 数字货币交易机器人
+│   │   └── crypto_backtest.py   # 策略历史回测引擎
+│   └── strategies/             # 交易策略
+├── frontend/                   # Vue 3 前端源码
+├── static/                     # Vue 构建输出 (由 FastAPI 服务)
+├── data/                       # SQLite 数据库
+└── venv/                      # Python 虚拟环境
 ```
 
 ## 技术栈
 
-- 后端：Python + Flask
+- 后端：Python + FastAPI
 - 数据处理：pandas、numpy
 - A 股行情：东方财富 API / 腾讯财经 API
 - 加密货币：Binance REST API（HMAC-SHA256 签名认证）

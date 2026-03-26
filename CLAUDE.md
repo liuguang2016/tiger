@@ -12,19 +12,25 @@ A comprehensive trading assistant combining delivery order analysis, spring rebo
 
 ```bash
 # Install dependencies
+cd backend
 pip install -r requirements.txt
+cd ..
 
-# Run the application
-python app.py
+# Run the application (FastAPI - recommended)
+cd backend
+uvicorn main:app --reload --port 8002
 
 # Access the web interface
-# http://127.0.0.1:5000
+# http://127.0.0.1:8002
+
+# API documentation (FastAPI auto-generated)
+# http://127.0.0.1:8002/docs
 ```
 
 ## Architecture
 
 ### Technology Stack
-- **Backend**: Python 3.14 + Flask
+- **Backend**: Python 3.14 + FastAPI 0.115+
 - **Data Processing**: pandas, numpy
 - **A-Share Data**: 东方财富 API / 腾讯财经 API (via akshare)
 - **Crypto**: Binance REST API (HMAC-SHA256)
@@ -34,26 +40,33 @@ python app.py
 ### Project Structure
 ```
 tigger/
-├── app.py                      # Flask main application & API routes
-├── requirements.txt            # Python dependencies
-├── services/
-│   ├── parser.py               # CSV delivery order parsing
-│   ├── matcher.py              # FIFO trade matching & P&L calculation
-│   ├── analyzer.py             # Trading style analysis
-│   ├── stock_data.py           # A-share K-line data fetching
-│   ├── database.py             # SQLite data storage
-│   ├── screener.py             # Spring rebound stock screener
-│   ├── signal_engine.py        # Trading signal generation
-│   ├── binance_client.py       # Binance REST API wrapper
-│   ├── crypto_trader.py        # Crypto trading bot
-│   ├── crypto_backtest.py      # Crypto strategy backtest engine
-│   └── stock_backtest.py       # Stock strategy backtest engine
-└── static/
-    ├── index.html              # Main frontend page
-    ├── css/style.css           # Styles
-    └── js/
-        ├── app.js              # Frontend interaction logic
-        └── chart.js            # K-line chart rendering
+├── backend/
+│   ├── main.py                 # FastAPI main application entry point
+│   ├── app.py                  # Flask main application (kept for comparison)
+│   ├── api/                    # API route modules
+│   │   ├── response.py         # Response helpers (success_response, error_response)
+│   │   └── routes/
+│   │       ├── trades.py       # /api/upload, /api/trades, /api/kline, /api/report
+│   │       ├── screener.py     # /api/screener/* (9 endpoints)
+│   │       ├── crypto.py       # /api/crypto/* (9 endpoints)
+│   │       └── backtest.py     # /api/crypto/backtest/*, /api/stock/backtest/* (5 endpoints)
+│   ├── requirements.txt         # Python dependencies
+│   ├── services/               # Business logic
+│   │   ├── parser.py          # CSV delivery order parsing
+│   │   ├── matcher.py         # FIFO trade matching & P&L calculation
+│   │   ├── analyzer.py        # Trading style analysis
+│   │   ├── stock_data.py      # A-share K-line data fetching
+│   │   ├── database.py        # SQLite data storage
+│   │   ├── screener.py        # Spring rebound stock screener
+│   │   ├── signal_engine.py   # Trading signal generation
+│   │   ├── binance_client.py  # Binance REST API wrapper
+│   │   ├── crypto_trader.py   # Crypto trading bot
+│   │   ├── crypto_backtest.py # Crypto strategy backtest engine
+│   │   └── stock_backtest.py  # Stock strategy backtest engine
+│   └── strategies/            # Trading strategies
+├── frontend/                   # Vue 3 frontend source
+├── static/                     # Vue build output (served by FastAPI)
+└── data/                       # SQLite database
 ```
 
 ### Core Modules
@@ -82,3 +95,10 @@ tigger/
 - Historical K-line simulation (1h/4h/1d intervals)
 - Bar-by-bar strategy execution
 - Performance metrics: return, Sharpe ratio, max drawdown, win rate
+
+## Active Technologies
+- Python 3.14 + FastAPI 0.115+, uvicorn[standard], python-multipart (001-fastapi-migration)
+- SQLite (`data/trades.db`) - unchanged (001-fastapi-migration)
+
+## Recent Changes
+- 001-fastapi-migration: Added Python 3.14 + FastAPI 0.115+, uvicorn[standard], python-multipart

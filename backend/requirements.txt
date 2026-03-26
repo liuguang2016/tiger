@@ -4,3 +4,7 @@ pandas>=2.0
 # aiohttp 3.11.x 不支持 Python 3.8，请使用 Python 3.9+
 aiohttp>=3.11.15
 akshare>=1.10
+# FastAPI migration
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.20
