@@ -23,7 +23,11 @@
       "Bash(timeout 5 python -c \"from main import app; print\\(''FastAPI app loaded successfully''\\)\")",
       "Read(//usr/bin/**)",
       "Bash(/home/liuguang/tigger/venv/bin/pip install:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(npm test:*)",
+      "Bash(npm install:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm run:*)"
     ]
   }
 }
