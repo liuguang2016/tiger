@@ -15,7 +15,33 @@
 
 ---
 
-## 2. 配色规范
+## 2. 字体与基础样式
+
+### 字体系统
+```css
+--font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+--font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+```
+
+### 响应式断点
+```css
+--breakpoint-sm: 640px;
+--breakpoint-md: 768px;
+--breakpoint-lg: 1024px;
+--breakpoint-xl: 1280px;
+```
+
+---
+
+## 3. 配色规范
 
 ### 色彩系统
 ```
@@ -56,7 +82,7 @@
 
 ---
 
-## 3. 导航栏
+## 4. 导航栏
 
 ### 设计
 - 高度: 56px
@@ -74,7 +100,7 @@
 
 ---
 
-## 4. 卡片系统
+## 5. 卡片系统
 
 ### 通用卡片
 - 背景: `#ffffff`
@@ -85,10 +111,10 @@
 
 ### 统计卡片 (StatCard)
 - 背景: `#ffffff`
-- 内边距: 20px
+- 内边距: 24px
 - 标签: 12px, `#64748b`
-- 数值: 24px, `#1e293b`, font-weight 600
-- 底部留白增加 50%
+- 数值: 28px, `#1e293b`, font-weight 600
+- 底部外边距: 24px（原为 16px）
 
 ### 图表面板
 - 背景: `#ffffff`
@@ -98,7 +124,7 @@
 
 ---
 
-## 5. 列表/表格
+## 6. 列表/表格
 
 ### 设计原则
 - 行高增加，提升可读性
@@ -114,14 +140,14 @@
 
 ---
 
-## 6. 按钮系统
+## 7. 按钮系统
 
 ### 主按钮
 - 背景: `#0891b2`
 - 文字: `#ffffff`
 - 圆角: 8px
 - 内边距: 10px 20px
-- 悬停: 背景加深 10%
+- 悬停: 背景 `#077a8a`（加深一个色阶）
 
 ### 次按钮
 - 背景: `#ffffff`
@@ -136,7 +162,7 @@
 
 ---
 
-## 7. 标签页 (Tabs)
+## 8. 标签页 (Tabs)
 
 ### 设计
 - 背景分隔: 无
@@ -147,7 +173,7 @@
 
 ---
 
-## 8. 输入控件
+## 9. 输入控件
 
 ### Select 下拉框
 - 背景: `#ffffff`
@@ -164,20 +190,33 @@
 
 ---
 
-## 9. 页面结构调整
+## 10. 页面结构调整
 
 ### 整体布局
 - 最大宽度: 1400px（收缩两边留白）
-- 内边距: 32px（桌面）
-- 元素间距: 24px（增加 50%）
+- 内边距: 桌面 32px，平板 24px，手机 16px
+- 元素间距: 24px
 
 ### 主内容区
 - 上边距: 32px
 - 卡片间距: 24px
 
+### 响应式规则
+```css
+@media (max-width: 1024px) {
+  .main-container { padding: 24px; }
+}
+
+@media (max-width: 768px) {
+  .main-container { padding: 16px; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .content-layout, .pool-layout, .crypto-layout { grid-template-columns: 1fr !important; }
+}
+```
+
 ---
 
-## 10. 组件清单
+## 11. 组件清单
 
 | 组件 | 改动说明 |
 |------|----------|
@@ -194,7 +233,7 @@
 
 ---
 
-## 11. 实施文件清单
+## 12. 实施文件清单
 
 ### 需要修改的文件
 ```
@@ -221,23 +260,23 @@ frontend/src/views/CryptoView.vue
 
 ---
 
-## 12. 实施顺序
+## 13. 实施顺序
 
-1. **variables.css** - 全局样式变量
+1. **variables.css** - 全局样式变量（配色、字体、响应式断点）
 2. **NavBar** - 导航栏改造
 3. **StatCard** - 统计卡片
 4. **UploadZone** - 上传组件
 5. **TradeList** - 交易列表
 6. **KLineChart** - K线图容器
 7. **IndexBar** - 指数条
-8. **StockPool** - 股票池
-9. **BotControls** - 机器人控制
-10. **ConfigPanel** - 配置面板
+8. **ConfigPanel** - 配置面板（先改，其他组件依赖）
+9. **StockPool** - 股票池
+10. **BotControls** - 机器人控制
 11. **各 View 页面** - 布局调整
 
 ---
 
-## 13. 验证标准
+## 14. 验证标准
 
 - [ ] 页面背景为暖米白 `#f8f6f3`
 - [ ] 卡片为纯白，带轻阴影
