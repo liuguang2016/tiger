@@ -299,18 +299,19 @@ function updateBtParam(key, value) {
 .mode-switch {
   display: flex;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .mode-btn {
-  padding: 8px 16px;
+  padding: 10px 20px;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: var(--bg-tertiary);
+  border-radius: 6px;
+  background: var(--bg-card);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
 }
 
 .mode-btn:hover {
@@ -327,12 +328,12 @@ function updateBtParam(key, value) {
 .strategy-row {
   display: flex;
   align-items: flex-end;
-  gap: 12px;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
 .strategy-row .param-group {
-  min-width: 180px;
+  min-width: 200px;
 }
 
 .section-title {
@@ -343,8 +344,8 @@ function updateBtParam(key, value) {
 
 .params-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
 }
 
 .param-group {
@@ -356,15 +357,22 @@ function updateBtParam(key, value) {
 .param-label {
   font-size: 12px;
   color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .param-group select {
-  background: var(--bg-tertiary);
+  background: var(--bg-card);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 8px;
+  border-radius: 6px;
+  padding: 10px 12px;
   font-size: 13px;
+  transition: border-color var(--transition-fast);
+}
+
+.param-group select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
 }
 
 .param-toggle {
@@ -382,15 +390,15 @@ function updateBtParam(key, value) {
 .action-row {
   display: flex;
   gap: 12px;
-  margin-top: 16px;
+  margin-top: 20px;
 }
 
 .btn-screen,
 .btn-run-backtest {
   background: var(--accent-primary);
   color: white;
-  padding: 10px 24px;
-  border-radius: var(--radius-md);
+  padding: 12px 24px;
+  border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
   transition: all var(--transition-fast);
@@ -398,7 +406,7 @@ function updateBtParam(key, value) {
 
 .btn-screen:hover:not(:disabled),
 .btn-run-backtest:hover:not(:disabled) {
-  background: #4a9eff;
+  background: #077a8a;
 }
 
 .btn-screen:disabled,
@@ -410,9 +418,11 @@ function updateBtParam(key, value) {
 .btn-stop {
   background: var(--accent-danger);
   color: white;
-  padding: 10px 24px;
-  border-radius: var(--radius-md);
+  padding: 12px 24px;
+  border-radius: 8px;
   font-size: 14px;
+  font-weight: 500;
+  transition: all var(--transition-fast);
 }
 
 .progress-bar {
@@ -420,9 +430,9 @@ function updateBtParam(key, value) {
 }
 
 .progress-bar-track {
-  height: 8px;
-  background: var(--bg-tertiary);
-  border-radius: 4px;
+  height: 6px;
+  background: var(--bg-secondary);
+  border-radius: 3px;
   overflow: hidden;
 }
 
@@ -440,32 +450,33 @@ function updateBtParam(key, value) {
 }
 
 .bt-results {
-  margin-top: 20px;
+  margin-top: 24px;
 }
 
 .bt-metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 16px;
 }
 
 .bt-metric-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   border-radius: var(--radius-md);
-  padding: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  box-shadow: var(--shadow-sm);
 }
 
 .bt-metric-label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .bt-metric-value {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   font-family: var(--font-mono);
 }

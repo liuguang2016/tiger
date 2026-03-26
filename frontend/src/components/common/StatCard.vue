@@ -25,30 +25,22 @@ defineProps({
 
 <style scoped>
 .stat-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   border-radius: var(--radius-md);
-  padding: 16px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  box-shadow: var(--shadow-sm);
   transition: all var(--transition-fast);
 }
 
 .stat-card:hover {
-  border-color: var(--border-light);
-}
-
-.stat-card.profit {
-  border-color: rgba(63, 185, 80, 0.3);
+  box-shadow: var(--shadow-md);
 }
 
 .stat-card.profit .stat-value {
   color: var(--accent-success);
-}
-
-.stat-card.loss {
-  border-color: rgba(248, 81, 73, 0.3);
 }
 
 .stat-card.loss .stat-value {
@@ -58,14 +50,14 @@ defineProps({
 .stat-label {
   font-size: 12px;
   color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-weight: 500;
 }
 
 .stat-value {
-  font-size: 20px;
+  font-size: 28px;
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-mono);
+  line-height: 1.2;
 }
 </style>

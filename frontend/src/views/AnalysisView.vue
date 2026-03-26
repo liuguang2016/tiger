@@ -115,40 +115,40 @@ onMounted(() => {
 .section-title {
   font-size: 18px;
   font-weight: 600;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
+  gap: 16px;
 }
 
 .content-layout {
   display: grid;
   grid-template-columns: 400px 1fr;
-  gap: 20px;
-  min-height: 500px;
+  gap: 24px;
+  min-height: 520px;
 }
 
 .trade-list-container {
-  height: 500px;
+  height: 520px;
 }
 
 .chart-panel {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   border-radius: var(--radius-md);
-  padding: 16px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
+  box-shadow: var(--shadow-sm);
 }
 
 .chart-info {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 16px;
+  margin-bottom: 16px;
   flex-shrink: 0;
 }
 
@@ -168,9 +168,13 @@ onMounted(() => {
   font-size: 13px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .content-layout {
     grid-template-columns: 1fr;
+  }
+
+  .trade-list-container {
+    height: 400px;
   }
 }
 </style>

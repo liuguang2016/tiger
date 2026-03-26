@@ -57,7 +57,10 @@ function triggerFileSelect() {
       @drop="onDrop"
       @click="triggerFileSelect"
     >
-      <div class="drop-zone-icon">📂</div>
+      <svg class="drop-zone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M12 11v4m0 0l-2-2m2 2l2-2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
       <p class="drop-zone-text">拖拽 CSV 交割单到此处，或</p>
       <button class="upload-btn">选择文件</button>
       <p class="drop-zone-hint">支持常见券商导出的 CSV 格式交割单</p>
@@ -93,41 +96,44 @@ function triggerFileSelect() {
 .drop-zone {
   border: 2px dashed var(--border-color);
   border-radius: var(--radius-lg);
-  padding: 40px;
+  padding: 48px;
   text-align: center;
   cursor: pointer;
   transition: all var(--transition-normal);
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
 }
 
 .drop-zone:hover,
 .drop-zone.dragging {
   border-color: var(--accent-primary);
-  background: rgba(88, 166, 255, 0.05);
+  background: rgba(8, 145, 178, 0.04);
 }
 
 .drop-zone-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
+  width: 48px;
+  height: 48px;
+  color: var(--accent-primary);
+  margin: 0 auto 16px;
 }
 
 .drop-zone-text {
   color: var(--text-secondary);
   margin-bottom: 16px;
+  font-size: 14px;
 }
 
 .upload-btn {
   background: var(--accent-primary);
   color: white;
-  padding: 10px 24px;
-  border-radius: var(--radius-md);
+  padding: 10px 20px;
+  border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
   transition: all var(--transition-fast);
 }
 
 .upload-btn:hover {
-  background: #4a9eff;
+  background: #077a8a;
 }
 
 .drop-zone-hint {
@@ -137,7 +143,7 @@ function triggerFileSelect() {
 }
 
 .status-bar {
-  margin-top: 16px;
+  margin-top: 20px;
   display: flex;
   justify-content: center;
 }
@@ -163,16 +169,16 @@ function triggerFileSelect() {
 }
 
 .generate-report-btn {
-  background: var(--accent-purple);
+  background: var(--accent-primary);
   color: white;
   padding: 12px 24px;
-  border-radius: var(--radius-md);
+  border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
   transition: all var(--transition-fast);
 }
 
 .generate-report-btn:hover {
-  background: #9333ea;
+  background: #077a8a;
 }
 </style>

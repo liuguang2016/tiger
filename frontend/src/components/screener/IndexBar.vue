@@ -47,10 +47,9 @@ function formatChange(val) {
 <style scoped>
 .index-bar {
   display: flex;
-  gap: 24px;
-  padding: 12px 20px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  gap: 32px;
+  padding: 16px 24px;
+  background: var(--bg-primary);
   border-radius: var(--radius-md);
   margin-bottom: 20px;
 }
@@ -64,28 +63,30 @@ function formatChange(val) {
 .index-name {
   color: var(--text-secondary);
   font-size: 13px;
+  font-weight: 500;
 }
 
 .index-value {
   font-weight: 600;
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 16px;
+  color: var(--accent-primary);
 }
 
 .index-change {
   font-size: 13px;
   font-family: var(--font-mono);
   padding: 2px 8px;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
 }
 
 .index-change.positive {
   color: var(--accent-success);
-  background: rgba(63, 185, 80, 0.1);
+  background: rgba(16, 185, 129, 0.1);
 }
 
 .index-change.negative {
   color: var(--accent-danger);
-  background: rgba(248, 81, 73, 0.1);
+  background: rgba(239, 68, 68, 0.1);
 }
 </style>

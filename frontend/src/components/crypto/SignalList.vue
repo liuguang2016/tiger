@@ -51,43 +51,48 @@ function formatPct(val) {
 }
 
 .signal-item {
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--transition-fast);
   border: 1px solid transparent;
+  background: var(--bg-secondary);
+  margin-bottom: 4px;
 }
 
 .signal-item:hover {
-  background: var(--bg-hover);
+  background: var(--bg-primary);
+  border-color: var(--border-color);
 }
 
 .signal-item.active {
-  background: var(--bg-tertiary);
   border-color: var(--accent-primary);
+  background: rgba(8, 145, 178, 0.06);
 }
 
 .signal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .signal-symbol {
   font-weight: 600;
   font-size: 14px;
+  color: var(--text-primary);
 }
 
 .signal-price {
   font-family: var(--font-mono);
   font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .signal-info {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -97,7 +102,7 @@ function formatPct(val) {
 
 .empty-list {
   text-align: center;
-  padding: 20px;
+  padding: 32px;
   color: var(--text-muted);
 }
 </style>

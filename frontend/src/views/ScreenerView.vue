@@ -93,38 +93,34 @@ onUnmounted(() => {
 .screener-view {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-}
-
-.pool-section {
-  margin-top: 8px;
+  gap: 24px;
 }
 
 .pool-layout {
   display: grid;
   grid-template-columns: 350px 1fr;
-  gap: 20px;
-  min-height: 500px;
+  gap: 24px;
+  min-height: 520px;
 }
 
 .pool-list-container {
-  height: 500px;
+  height: 520px;
 }
 
 .chart-panel {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   border-radius: var(--radius-md);
-  padding: 16px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
+  box-shadow: var(--shadow-sm);
 }
 
 .chart-info {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 16px;
+  margin-bottom: 16px;
   flex-shrink: 0;
 }
 
@@ -144,9 +140,13 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .pool-layout {
     grid-template-columns: 1fr;
+  }
+
+  .pool-list-container {
+    height: 400px;
   }
 }
 </style>

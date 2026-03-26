@@ -229,17 +229,23 @@ onMounted(() => {
               class="crypto-tab"
               :class="{ active: activeTab === 'signals' }"
               @click="activeTab = 'signals'"
-            >信号</button>
+            >
+              信号
+            </button>
             <button
               class="crypto-tab"
               :class="{ active: activeTab === 'positions' }"
               @click="activeTab = 'positions'"
-            >持仓</button>
+            >
+              持仓
+            </button>
             <button
               class="crypto-tab"
               :class="{ active: activeTab === 'trades' }"
               @click="activeTab = 'trades'"
-            >交易记录</button>
+            >
+              交易记录
+            </button>
           </div>
           <div class="crypto-list-container">
             <component
@@ -268,34 +274,36 @@ onMounted(() => {
 .crypto-view {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 
 .crypto-dashboard {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
 }
 
 .dash-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   border-radius: var(--radius-md);
-  padding: 16px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  box-shadow: var(--shadow-sm);
 }
 
 .dash-label {
   font-size: 12px;
   color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .dash-value {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
   font-family: var(--font-mono);
+  color: var(--text-primary);
 }
 
 .dash-value.small {
@@ -311,14 +319,14 @@ onMounted(() => {
 }
 
 .backtest-section {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   border-radius: var(--radius-md);
-  padding: 16px;
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
 }
 
 .backtest-header {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .backtest-title {
@@ -342,23 +350,32 @@ onMounted(() => {
 .param-label {
   font-size: 12px;
   color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .param-group select {
-  background: var(--bg-tertiary);
+  background: var(--bg-card);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 8px;
+  border-radius: 6px;
+  padding: 10px 14px;
   font-size: 13px;
+  transition: border-color var(--transition-fast);
+}
+
+.param-group select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
 }
 
 .btn-run-backtest {
   background: var(--accent-primary);
   color: white;
-  padding: 8px 20px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all var(--transition-fast);
 }
 
 .btn-run-backtest:disabled {
@@ -371,7 +388,7 @@ onMounted(() => {
 
 .progress-bar-track {
   height: 6px;
-  background: var(--bg-tertiary);
+  background: var(--bg-secondary);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -382,31 +399,32 @@ onMounted(() => {
 }
 
 .bt-results {
-  margin-top: 20px;
+  margin-top: 24px;
 }
 
 .bt-metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 16px;
 }
 
 .bt-metric-card {
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-sm);
-  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .bt-metric-label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .bt-metric-value {
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 600;
   font-family: var(--font-mono);
 }
@@ -420,23 +438,23 @@ onMounted(() => {
 }
 
 .crypto-main-section {
-  margin-top: 8px;
+  margin-top: 0;
 }
 
 .crypto-layout {
   display: grid;
   grid-template-columns: 350px 1fr;
-  gap: 20px;
-  min-height: 500px;
+  gap: 24px;
+  min-height: 520px;
 }
 
 .crypto-list-panel {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .crypto-tabs {
@@ -447,43 +465,45 @@ onMounted(() => {
 
 .crypto-tab {
   flex: 1;
-  padding: 12px;
+  padding: 14px 20px;
   text-align: center;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--text-secondary);
   transition: all var(--transition-fast);
+  border-bottom: 2px solid transparent;
 }
 
 .crypto-tab:hover {
-  background: var(--bg-hover);
+  color: var(--text-primary);
+  background: var(--bg-secondary);
 }
 
 .crypto-tab.active {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border-bottom: 2px solid var(--accent-primary);
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
 }
 
 .crypto-list-container {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 12px;
 }
 
 .crypto-chart-panel {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   border-radius: var(--radius-md);
-  padding: 16px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
+  box-shadow: var(--shadow-sm);
 }
 
 .chart-info {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   flex-shrink: 0;
 }
 
@@ -492,7 +512,7 @@ onMounted(() => {
   font-size: 16px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .crypto-layout {
     grid-template-columns: 1fr;
   }

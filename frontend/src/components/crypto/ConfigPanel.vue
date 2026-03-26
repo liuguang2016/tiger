@@ -58,17 +58,17 @@ function handleSave() {
 
 <style scoped>
 .crypto-config-bar {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   border-radius: var(--radius-md);
-  padding: 16px;
-  margin-bottom: 20px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
 }
 
 .config-row {
   display: flex;
   align-items: flex-end;
-  gap: 16px;
+  gap: 20px;
   flex-wrap: wrap;
 }
 
@@ -81,29 +81,37 @@ function handleSave() {
 .config-label {
   font-size: 12px;
   color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .config-input {
-  background: var(--bg-tertiary);
+  background: var(--bg-card);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 8px 12px;
+  border-radius: 6px;
+  padding: 10px 14px;
   font-size: 13px;
   width: 250px;
+  transition: border-color var(--transition-fast);
+}
+
+.config-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
 }
 
 .btn-config-save {
   background: var(--accent-primary);
   color: white;
-  padding: 8px 20px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
   transition: all var(--transition-fast);
 }
 
 .btn-config-save:hover:not(:disabled) {
-  background: #4a9eff;
+  background: #077a8a;
 }
 
 .btn-config-save:disabled {
@@ -119,13 +127,13 @@ function handleSave() {
 }
 
 .status-badge {
-  padding: 2px 8px;
+  padding: 2px 10px;
   border-radius: 10px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .status-badge.running {
-  background: rgba(63, 185, 80, 0.2);
+  background: rgba(16, 185, 129, 0.12);
   color: var(--accent-success);
 }
 </style>

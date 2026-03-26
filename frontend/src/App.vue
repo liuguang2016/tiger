@@ -8,9 +8,9 @@ import CryptoView from './views/CryptoView.vue'
 const currentView = ref('analysis')
 
 const navItems = [
-  { id: 'analysis', label: '交割单分析', icon: '📊' },
-  { id: 'stock-pick', label: '个人选股', icon: '🎯' },
-  { id: 'crypto', label: '数字货币', icon: '₿' }
+  { id: 'analysis', label: '交割单分析' },
+  { id: 'stock-pick', label: '个人选股' },
+  { id: 'crypto', label: '数字货币' }
 ]
 
 function onNavigate(view) {
@@ -41,18 +41,18 @@ function onNavigate(view) {
 
 .main-container {
   flex: 1;
-  padding: 20px;
-  max-width: 1600px;
+  padding: 32px;
+  max-width: 1400px;
   margin: 0 auto;
   width: 100%;
 }
 
 .footer {
-  padding: 16px;
+  padding: 20px;
   text-align: center;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 13px;
   border-top: 1px solid var(--border-color);
-  background: var(--bg-secondary);
+  background: var(--bg-card);
 }
 </style>

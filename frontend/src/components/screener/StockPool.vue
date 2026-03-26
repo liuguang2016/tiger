@@ -78,20 +78,20 @@ function getTagClass(tag) {
 
 <style scoped>
 .stock-pool {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .pool-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
 }
@@ -109,8 +109,8 @@ function getTagClass(tag) {
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 10px;
-  background: rgba(248, 81, 73, 0.15);
-  color: var(--accent-danger, #f85149);
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--accent-danger);
 }
 
 .btn-clear-pool {
@@ -121,18 +121,18 @@ function getTagClass(tag) {
   border-radius: 6px;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
 }
 
 .btn-clear-pool:hover {
-  color: var(--accent-danger, #f85149);
-  border-color: var(--accent-danger, #f85149);
+  color: var(--accent-danger);
+  border-color: var(--accent-danger);
 }
 
 .pool-list {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 12px;
 }
 
 .pool-list::-webkit-scrollbar {
@@ -166,37 +166,37 @@ function getTagClass(tag) {
 
 /* 交易池股票卡片 */
 .pool-card {
-  background: var(--bg-tertiary, #1c2128);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm, 8px);
-  padding: 12px 14px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
   margin-bottom: 8px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
   position: relative;
+  border: 1px solid transparent;
 }
 
 .pool-card:hover {
-  background: var(--bg-hover, #252c35);
-  border-color: var(--accent-primary, #58a6ff);
+  background: var(--bg-primary);
+  border-color: var(--border-color);
 }
 
 .pool-card.active {
-  border-color: var(--accent-primary, #58a6ff);
-  background: rgba(88, 166, 255, 0.08);
+  border-color: var(--accent-primary);
+  background: rgba(8, 145, 178, 0.06);
 }
 
 .pool-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .pool-card-name-wrap {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .pool-card-name {
@@ -208,17 +208,18 @@ function getTagClass(tag) {
 .pool-card-code {
   font-size: 11px;
   color: var(--text-muted);
+  font-family: var(--font-mono);
 }
 
 .pool-card-score {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  color: var(--color-yellow, #d29922);
+  color: var(--accent-warning);
 }
 
 .pool-card-tags {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
@@ -230,53 +231,53 @@ function getTagClass(tag) {
 }
 
 .pool-tag.drop {
-  color: var(--color-green, #3fb950);
-  background: rgba(63, 185, 80, 0.1);
+  color: var(--accent-success);
+  background: rgba(16, 185, 129, 0.1);
 }
 
 .pool-tag.vol {
-  color: var(--accent-danger, #f85149);
-  background: rgba(248, 81, 73, 0.1);
+  color: var(--accent-danger);
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .pool-tag.price {
   color: var(--text-secondary);
-  background: rgba(139, 148, 158, 0.1);
+  background: rgba(100, 116, 139, 0.1);
 }
 
 .pool-tag.pattern {
-  color: var(--color-yellow, #d29922);
-  background: rgba(210, 153, 34, 0.15);
+  color: var(--accent-warning);
+  background: rgba(245, 158, 11, 0.12);
 }
 
 .pool-tag.ma {
-  color: var(--accent-primary, #58a6ff);
-  background: rgba(88, 166, 255, 0.12);
+  color: var(--accent-primary);
+  background: rgba(8, 145, 178, 0.1);
 }
 
 .pool-tag.signal {
-  color: var(--color-purple, #bc8cff);
-  background: rgba(188, 140, 255, 0.12);
+  color: #a371f7;
+  background: rgba(163, 113, 247, 0.1);
 }
 
 .pool-tag.confidence {
-  color: var(--color-orange, #db6d28);
-  background: rgba(219, 109, 40, 0.12);
+  color: #db6d28;
+  background: rgba(219, 109, 40, 0.1);
 }
 
 .pool-tag.probe {
   color: #f0883e;
-  background: rgba(240, 136, 62, 0.15);
+  background: rgba(240, 136, 62, 0.12);
   font-weight: 600;
 }
 
 .pool-tag.platform {
   color: #a371f7;
-  background: rgba(163, 113, 247, 0.12);
+  background: rgba(163, 113, 247, 0.1);
 }
 
 .pool-card-reason {
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;
@@ -299,7 +300,7 @@ function getTagClass(tag) {
   display: none;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
 }
 
 .pool-card:hover .pool-card-remove {
@@ -307,7 +308,7 @@ function getTagClass(tag) {
 }
 
 .pool-card-remove:hover {
-  background: var(--accent-danger, #f85149);
+  background: var(--accent-danger);
   color: white;
 }
 </style>

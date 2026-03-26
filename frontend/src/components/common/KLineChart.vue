@@ -190,6 +190,8 @@ onUnmounted(() => {
   height: 100%;
   min-height: 400px;
   position: relative;
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
 }
 
 .kline-chart {

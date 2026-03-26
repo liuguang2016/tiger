@@ -22,7 +22,8 @@
       "Bash(.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks 2>/dev/null)",
       "Bash(timeout 5 python -c \"from main import app; print\\(''FastAPI app loaded successfully''\\)\")",
       "Read(//usr/bin/**)",
-      "Bash(/home/liuguang/tigger/venv/bin/pip install:*)"
+      "Bash(/home/liuguang/tigger/venv/bin/pip install:*)",
+      "Bash(npm run:*)"
     ]
   }
 }

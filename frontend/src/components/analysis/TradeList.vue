@@ -45,7 +45,7 @@ function formatMoney(val) {
 
 function formatPct(val) {
   if (val == null) return '-'
-  return (val >= 0 ? '+' : '') + val.toFixed(2) + '%'
+  return (val >= 0 ? '+' : '') + (val * 100).toFixed(2) + '%'
 }
 </script>
 
@@ -108,20 +108,20 @@ function formatPct(val) {
 
 <style scoped>
 .trade-list-panel {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
 }
@@ -132,35 +132,43 @@ function formatPct(val) {
 }
 
 .trade-tab {
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
   color: var(--text-secondary);
   transition: all var(--transition-fast);
+  font-weight: 500;
 }
 
 .trade-tab:hover {
-  background: var(--bg-hover);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .trade-tab.active {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
+  color: var(--accent-primary);
+  background: rgba(8, 145, 178, 0.08);
 }
 
 .tab-count {
-  margin-left: 4px;
+  margin-left: 6px;
   color: var(--text-muted);
   font-size: 12px;
+  font-weight: 400;
 }
 
 .sort-select {
-  background: var(--bg-tertiary);
+  background: var(--bg-card);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 4px 8px;
-  font-size: 12px;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.sort-select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
 }
 
 .trade-list {
@@ -170,8 +178,8 @@ function formatPct(val) {
 }
 
 .trade-item {
-  padding: 12px;
-  border-radius: var(--radius-sm);
+  padding: 16px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   margin-bottom: 4px;
   transition: all var(--transition-fast);
@@ -179,11 +187,11 @@ function formatPct(val) {
 }
 
 .trade-item:hover {
-  background: var(--bg-hover);
+  background: var(--bg-primary);
 }
 
 .trade-item.active {
-  background: var(--bg-tertiary);
+  background: rgba(8, 145, 178, 0.06);
   border-color: var(--accent-primary);
 }
 
@@ -191,11 +199,12 @@ function formatPct(val) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
 .trade-stock {
   font-weight: 500;
+  font-size: 14px;
   color: var(--text-primary);
 }
 
@@ -209,7 +218,7 @@ function formatPct(val) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .trade-date {
@@ -220,6 +229,7 @@ function formatPct(val) {
 .trade-profit {
   font-weight: 600;
   font-family: var(--font-mono);
+  font-size: 14px;
 }
 
 .trade-profit.profit {
@@ -233,13 +243,13 @@ function formatPct(val) {
 .trade-details {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
 .trade-empty {
   text-align: center;
-  padding: 40px;
+  padding: 48px;
   color: var(--text-muted);
 }
 </style>

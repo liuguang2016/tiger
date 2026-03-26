@@ -64,37 +64,41 @@ function formatPct(val) {
 }
 
 .trade-item {
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--transition-fast);
   border: 1px solid transparent;
+  background: var(--bg-secondary);
+  margin-bottom: 4px;
 }
 
 .trade-item:hover {
-  background: var(--bg-hover);
+  background: var(--bg-primary);
+  border-color: var(--border-color);
 }
 
 .trade-item.active {
-  background: var(--bg-tertiary);
   border-color: var(--accent-primary);
+  background: rgba(8, 145, 178, 0.06);
 }
 
 .trade-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
 .trade-symbol {
   font-weight: 600;
   font-size: 14px;
+  color: var(--text-primary);
 }
 
 .trade-pnl {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -108,36 +112,37 @@ function formatPct(val) {
 
 .trade-info {
   display: flex;
-  gap: 8px;
-  font-size: 11px;
+  gap: 12px;
+  font-size: 12px;
   color: var(--text-secondary);
+  margin-bottom: 4px;
 }
 
 .trade-side {
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .trade-side.BUY {
-  background: rgba(63, 185, 80, 0.2);
+  background: rgba(16, 185, 129, 0.12);
   color: var(--accent-success);
 }
 
 .trade-side.SELL {
-  background: rgba(248, 81, 73, 0.2);
+  background: rgba(239, 68, 68, 0.12);
   color: var(--accent-danger);
 }
 
 .trade-time {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
-  margin-top: 2px;
 }
 
 .empty-list {
   text-align: center;
-  padding: 20px;
+  padding: 32px;
   color: var(--text-muted);
 }
 </style>

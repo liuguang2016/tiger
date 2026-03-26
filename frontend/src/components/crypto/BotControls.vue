@@ -124,38 +124,45 @@ function updateParam(key, value) {
 
 <style scoped>
 .crypto-control-bar {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   border-radius: var(--radius-md);
-  padding: 16px;
-  margin-bottom: 20px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
 }
 
 .crypto-params {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 .param-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .param-label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .param-group select {
-  background: var(--bg-tertiary);
+  background: var(--bg-card);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 6px 8px;
-  font-size: 12px;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  transition: border-color var(--transition-fast);
+}
+
+.param-group select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
 }
 
 .param-toggle {
@@ -179,14 +186,15 @@ function updateParam(key, value) {
 .btn-bot-start {
   background: var(--accent-success);
   color: white;
-  padding: 8px 20px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
   transition: all var(--transition-fast);
 }
 
 .btn-bot-start:hover:not(:disabled) {
-  background: #2ea043;
+  background: #059669;
 }
 
 .btn-bot-start:disabled {
@@ -197,9 +205,11 @@ function updateParam(key, value) {
 .btn-bot-stop {
   background: var(--accent-danger);
   color: white;
-  padding: 8px 20px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all var(--transition-fast);
 }
 
 .btn-bot-stop:disabled {
@@ -208,17 +218,19 @@ function updateParam(key, value) {
 }
 
 .btn-manual-scan {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
+  background: var(--bg-card);
+  color: var(--text-secondary);
   border: 1px solid var(--border-color);
-  padding: 8px 20px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
   transition: all var(--transition-fast);
 }
 
 .btn-manual-scan:hover {
-  background: var(--bg-hover);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .bot-status-indicator {

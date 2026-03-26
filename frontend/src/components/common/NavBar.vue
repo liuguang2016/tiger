@@ -25,8 +25,7 @@ const emit = defineEmits(['navigate'])
           :class="{ active: active === item.id }"
           @click="emit('navigate', item.id)"
         >
-          <span class="nav-icon">{{ item.icon }}</span>
-          <span class="nav-label">{{ item.label }}</span>
+          {{ item.label }}
         </button>
       </nav>
     </div>
@@ -35,16 +34,16 @@ const emit = defineEmits(['navigate'])
 
 <style scoped>
 .header {
-  background: var(--bg-secondary);
+  background: var(--bg-card);
   border-bottom: 1px solid var(--border-color);
-  padding: 0 20px;
+  padding: 0 32px;
   position: sticky;
   top: 0;
   z-index: 100;
 }
 
 .header-inner {
-  max-width: 1600px;
+  max-width: 1400px;
   margin: 0 auto;
   display: flex;
   align-items: center;
@@ -55,7 +54,7 @@ const emit = defineEmits(['navigate'])
   font-size: 20px;
   font-weight: 600;
   color: var(--accent-primary);
-  margin-right: 40px;
+  margin-right: 48px;
 }
 
 .main-nav {
@@ -64,27 +63,32 @@ const emit = defineEmits(['navigate'])
 }
 
 .nav-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-radius: var(--radius-md);
+  padding: 8px 20px;
+  border-radius: 6px;
   color: var(--text-secondary);
   transition: all var(--transition-fast);
   font-size: 14px;
+  font-weight: 500;
+  position: relative;
 }
 
 .nav-item:hover {
-  background: var(--bg-hover);
   color: var(--text-primary);
+  background: var(--bg-secondary);
 }
 
 .nav-item.active {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
+  color: var(--accent-primary);
 }
 
-.nav-icon {
-  font-size: 16px;
+.nav-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 20px;
+  right: 20px;
+  height: 2px;
+  background: var(--accent-primary);
+  border-radius: 2px 2px 0 0;
 }
 </style>

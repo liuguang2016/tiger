@@ -62,37 +62,41 @@ function formatPct(val) {
 }
 
 .position-item {
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--transition-fast);
   border: 1px solid transparent;
+  background: var(--bg-secondary);
+  margin-bottom: 4px;
 }
 
 .position-item:hover {
-  background: var(--bg-hover);
+  background: var(--bg-primary);
+  border-color: var(--border-color);
 }
 
 .position-item.active {
-  background: var(--bg-tertiary);
   border-color: var(--accent-primary);
+  background: rgba(8, 145, 178, 0.06);
 }
 
 .position-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
 .position-symbol {
   font-weight: 600;
   font-size: 14px;
+  color: var(--text-primary);
 }
 
 .position-pnl {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -107,21 +111,22 @@ function formatPct(val) {
 .position-info {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 .position-prices {
   display: flex;
   justify-content: space-between;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
+  font-family: var(--font-mono);
 }
 
 .empty-list {
   text-align: center;
-  padding: 20px;
+  padding: 32px;
   color: var(--text-muted);
 }
 </style>

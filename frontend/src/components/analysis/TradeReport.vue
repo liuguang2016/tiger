@@ -40,9 +40,9 @@ function updateCharts() {
     charts.value['chart-holding-days'].setOption({
       tooltip: { trigger: 'axis' },
       grid: { top: 20, right: 20, bottom: 30, left: 50 },
-      xAxis: { type: 'category', data: r.holding_days_dist.days, axisLabel: { color: '#9ca3af' } },
-      yAxis: { type: 'value', axisLabel: { color: '#9ca3af' } },
-      series: [{ type: 'bar', data: r.holding_days_dist.counts, itemStyle: { color: '#3b82f6' } }]
+      xAxis: { type: 'category', data: r.holding_days_dist.days, axisLabel: { color: '#64748b' } },
+      yAxis: { type: 'value', axisLabel: { color: '#64748b' } },
+      series: [{ type: 'bar', data: r.holding_days_dist.counts, itemStyle: { color: '#0891b2' } }]
     })
   }
 
@@ -51,9 +51,9 @@ function updateCharts() {
     charts.value['chart-profit-dist'].setOption({
       tooltip: { trigger: 'axis' },
       grid: { top: 20, right: 20, bottom: 30, left: 50 },
-      xAxis: { type: 'category', data: r.profit_dist.ranges, axisLabel: { color: '#9ca3af', rotate: 30 } },
-      yAxis: { type: 'value', axisLabel: { color: '#9ca3af' } },
-      series: [{ type: 'bar', data: r.profit_dist.counts, itemStyle: { color: '#8b5cf6' } }]
+      xAxis: { type: 'category', data: r.profit_dist.ranges, axisLabel: { color: '#64748b', rotate: 30 } },
+      yAxis: { type: 'value', axisLabel: { color: '#64748b' } },
+      series: [{ type: 'bar', data: r.profit_dist.counts, itemStyle: { color: '#a371f7' } }]
     })
   }
 
@@ -64,13 +64,13 @@ function updateCharts() {
     charts.value['chart-monthly-pnl'].setOption({
       tooltip: { trigger: 'axis' },
       grid: { top: 20, right: 20, bottom: 30, left: 50 },
-      xAxis: { type: 'category', data: months, axisLabel: { color: '#9ca3af' } },
-      yAxis: { type: 'value', axisLabel: { color: '#9ca3af' } },
+      xAxis: { type: 'category', data: months, axisLabel: { color: '#64748b' } },
+      yAxis: { type: 'value', axisLabel: { color: '#64748b' } },
       series: [{
         type: 'bar',
         data: values,
         itemStyle: {
-          color: (p) => p.data >= 0 ? '#3fb950' : '#f85149'
+          color: (p) => p.data >= 0 ? '#10b981' : '#ef4444'
         }
       }]
     })
@@ -81,8 +81,8 @@ function updateCharts() {
     charts.value['chart-amount-trend'].setOption({
       tooltip: { trigger: 'axis' },
       grid: { top: 20, right: 20, bottom: 30, left: 50 },
-      xAxis: { type: 'category', data: r.amount_trend.dates, axisLabel: { color: '#9ca3af' } },
-      yAxis: { type: 'value', axisLabel: { color: '#9ca3af' } },
+      xAxis: { type: 'category', data: r.amount_trend.dates, axisLabel: { color: '#64748b' } },
+      yAxis: { type: 'value', axisLabel: { color: '#64748b' } },
       series: [{ type: 'line', data: r.amount_trend.amounts, smooth: true, itemStyle: { color: '#f59e0b' } }]
     })
   }
@@ -94,8 +94,8 @@ function updateCharts() {
     charts.value['chart-board-pref'].setOption({
       tooltip: { trigger: 'axis' },
       grid: { top: 20, right: 20, bottom: 60, left: 50 },
-      xAxis: { type: 'category', data: boards, axisLabel: { color: '#9ca3af', rotate: 45 } },
-      yAxis: { type: 'value', axisLabel: { color: '#9ca3af' } },
+      xAxis: { type: 'category', data: boards, axisLabel: { color: '#64748b', rotate: 45 } },
+      yAxis: { type: 'value', axisLabel: { color: '#64748b' } },
       series: [{ type: 'bar', data: profits, itemStyle: { color: '#10b981' } }]
     })
   }
@@ -107,13 +107,13 @@ function updateCharts() {
     charts.value['chart-stock-top10'].setOption({
       tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
       grid: { top: 20, right: 20, bottom: 60, left: 80 },
-      xAxis: { type: 'value', axisLabel: { color: '#9ca3af' } },
-      yAxis: { type: 'category', data: stocks, axisLabel: { color: '#9ca3af' } },
+      xAxis: { type: 'value', axisLabel: { color: '#64748b' } },
+      yAxis: { type: 'category', data: stocks, axisLabel: { color: '#64748b' } },
       series: [{
         type: 'bar',
         data: profits,
         itemStyle: {
-          color: (p) => p.data >= 0 ? '#3fb950' : '#f85149'
+          color: (p) => p.data >= 0 ? '#10b981' : '#ef4444'
         }
       }]
     })
@@ -182,18 +182,18 @@ onMounted(() => {
 .section-title {
   font-size: 18px;
   font-weight: 600;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .report-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .report-tag {
-  background: var(--accent-purple);
+  background: var(--accent-primary);
   color: white;
   padding: 4px 12px;
   border-radius: 20px;
@@ -203,20 +203,20 @@ onMounted(() => {
 .report-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 16px;
+  gap: 20px;
 }
 
 .report-chart-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   border-radius: var(--radius-md);
-  padding: 16px;
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
 }
 
 .chart-card-title {
   font-size: 14px;
   font-weight: 500;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   color: var(--text-secondary);
 }
 
@@ -225,11 +225,11 @@ onMounted(() => {
 }
 
 .report-summary {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
   border-radius: var(--radius-md);
-  padding: 20px;
-  margin-top: 20px;
+  padding: 24px;
+  margin-top: 24px;
+  box-shadow: var(--shadow-sm);
 }
 
 .report-summary h3 {
