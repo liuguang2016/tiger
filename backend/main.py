@@ -46,18 +46,19 @@ app.add_middleware(
 )
 
 # Mount static files (Vue SPA) - relative to project root
+# Only mount if running outside Docker (when nginx serves static files instead)
 import os
 static_path = os.path.join(os.path.dirname(__file__), "..", "static")
-app.mount("/static", StaticFiles(directory=static_path), name="static")
+if os.path.exists(static_path):
+    app.mount("/static", StaticFiles(directory=static_path), name="static")
 
-
-# Root path - serve index.html
-@app.get("/")
-async def root():
-    """Serve the main index.html from static folder."""
-    from fastapi.responses import FileResponse
-    static_index = os.path.join(os.path.dirname(__file__), "..", "static", "index.html")
-    return FileResponse(static_index)
+    # Root path - serve index.html
+    @app.get("/")
+    async def root():
+        """Serve the main index.html from static folder."""
+        from fastapi.responses import FileResponse
+        static_index = os.path.join(os.path.dirname(__file__), "..", "static", "index.html")
+        return FileResponse(static_index)
 
 
 # Register route modules

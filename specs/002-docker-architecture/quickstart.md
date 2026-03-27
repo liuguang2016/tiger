@@ -26,9 +26,9 @@ docker-compose up -d
 docker-compose logs -f
 
 # 5. 访问
-# 前端: http://localhost
-# API:  http://localhost/api/*
-# API 文档: http://localhost/docs
+# 前端: http://localhost:8080
+# API:  http://localhost:8080/api/*
+# API 文档: http://localhost:8080/docs
 ```
 
 ## 生产部署

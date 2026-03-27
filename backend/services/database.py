@@ -21,7 +21,7 @@ DB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(DB_DIR, 'trades.db')
 
 
-def _get DATABASE_URL() -> str:
+def _get_DATABASE_URL() -> str:
     """获取 DATABASE_URL 环境变量"""
     return os.environ.get(
         'DATABASE_URL',

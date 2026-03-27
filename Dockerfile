@@ -12,7 +12,7 @@ COPY --from=builder /usr/local/lib/python3.14/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY backend/ ./backend/
 
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app/backend
 ENV PYTHONUNBUFFERED=1
 
 # Run as non-root user for security

@@ -16,7 +16,7 @@
 - [X] T004 [P] Create `Dockerfile` with multi-stage Python build
 - [X] T005 [P] Create `docker-compose.yml` with postgres, backend, nginx services
 - [X] T006 [P] Create `docker-compose.prod.yml` with production overrides
-- [ ] T007 Verify `docker-compose config` passes without errors (⚠️ requires Docker)
+- [X] T007 Verify `docker-compose config` passes without errors ✅
 
 ---
 
@@ -28,7 +28,7 @@
 
 - [X] T008 Add `psycopg2-binary` to `backend/requirements.txt`
 - [X] T009 Modify `backend/services/database.py`: add DATABASE_URL env var support, replace sqlite3 with psycopg2, convert SQL syntax (datetime → NOW(), INSERT OR REPLACE → ON CONFLICT)
-- [ ] T010 Verify `python -c "from backend.services.database import get_conn; print('OK')"` works (⚠️ requires PostgreSQL)
+- [X] T010 Verify `python -c "from backend.services.database import get_conn; print('OK')"` works ✅
 
 ---
 
@@ -40,11 +40,11 @@
 
 ### Implementation
 
-- [ ] T011 [P] [US1] Build backend image: `docker-compose build backend`
-- [ ] T012 [P] [US1] Start all services: `docker-compose up -d`
-- [ ] T013 [US1] Verify postgres running: `docker-compose ps` shows 3 services
-- [ ] T014 [US1] Verify frontend accessible: `curl http://localhost` returns HTML
-- [ ] T015 [US1] Verify API proxy works: `curl http://localhost/api/trades` returns JSON
+- [X] T011 [P] [US1] Build backend image: `docker-compose build backend` ✅
+- [X] T012 [P] [US1] Start all services: `docker-compose up -d` ✅
+- [X] T013 [US1] Verify postgres running: `docker-compose ps` shows 3 services ✅
+- [X] T014 [US1] Verify frontend accessible: `curl http://localhost:8080` returns HTML ✅
+- [X] T015 [US1] Verify API proxy works: `curl http://localhost:8080/api/trades` returns JSON ✅
 - [ ] T016 [US1] Verify hot-reload (backend volume mount): modify backend file, restart, changes reflect
 
 **Checkpoint**: Local development environment works end-to-end
@@ -79,7 +79,7 @@
 
 - [ ] T022 [P] [US3] Optimize Dockerfile runtime stage (remove builder, copy only needed files)
 - [ ] T023 [P] [US3] Add Docker logging config to docker-compose.prod.yml
-- [ ] T024 [US3] Verify image size < 500MB: `docker images | grep tigger`
+- [X] T024 [US3] Verify image size < 500MB: `docker images | grep tigger` ✅ (439MB)
 - [ ] T025 [US3] Verify production compose config: `docker-compose -f docker-compose.yml -f docker-compose.prod.yml config`
 
 **Checkpoint**: Production deployment configuration works and image is optimized
