@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "postgresql": {
+      "command": "bash",
+      "args": ["-c", "cd /home/liuguang/tigger && set -a && source .env && set +a && exec npx @modelcontextprotocol/server-postgres postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"]
+    }
+  }
+}

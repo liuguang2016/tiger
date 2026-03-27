@@ -27,7 +27,21 @@
       "Bash(npm test:*)",
       "Bash(npm install:*)",
       "Bash(pnpm install:*)",
-      "Bash(pnpm run:*)"
+      "Bash(pnpm run:*)",
+      "Bash(npx:*)",
+      "Bash(git pull:*)",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)",
+      "Bash(git branch:*)",
+      "Bash(docker compose:*)",
+      "Bash(python:*)",
+      "Bash(POSTGRES_HOST=localhost python scripts/migrate_sqlite_to_pg.py)",
+      "Bash(POSTGRES_HOST=localhost POSTGRES_PASSWORD=your_secure_password_here python scripts/migrate_sqlite_to_pg.py)",
+      "Bash(PGPASSWORD=e0Zbc36ckXVYDEaphhpE psql -h localhost -U tigger -d tigger -c \"\\\\du\")",
+      "Bash(source .env)",
+      "Bash(set -a)",
+      "Bash(set +a)",
+      "Skill(update-config)"
     ]
   }
 }
