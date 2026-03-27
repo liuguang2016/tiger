@@ -16,10 +16,6 @@ logger = logging.getLogger(__name__)
 # 数据库连接池
 _connection_pool: Optional[pool.ThreadedConnectionPool] = None
 
-# SQLite 路径 (迁移用)
-DB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
-DB_PATH = os.path.join(DB_DIR, 'trades.db')
-
 
 def _get_DATABASE_URL() -> str:
     """获取 DATABASE_URL 环境变量"""
