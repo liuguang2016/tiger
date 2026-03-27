@@ -28,3 +28,6 @@ data/
 # 前端
 frontend/node_modules/
 frontend/dist/
+
+# Claude Code 本地配置
+.claude/settings.local.json
