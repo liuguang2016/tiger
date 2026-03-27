@@ -90,8 +90,8 @@ docker-compose exec postgres psql -U tigger -d tigger
 
 | 检查项 | 命令 | 预期结果 |
 |--------|------|----------|
-| 前端可访问 | `curl http://localhost` | 返回 HTML |
-| API 可用 | `curl http://localhost/api/trades` | 返回 JSON |
+| 前端可访问 | `curl http://localhost:8080` | 返回 HTML |
+| API 可用 | `curl http://localhost:8080/api/trades` | 返回 JSON |
 | PostgreSQL 运行 | `docker-compose ps` | 3 个服务 running |
 | 数据迁移 | `python scripts/migrate_sqlite_to_pg.py` | 8 张表全部迁移 |
 | 镜像大小 | `docker images \| grep tigger` | < 500MB |

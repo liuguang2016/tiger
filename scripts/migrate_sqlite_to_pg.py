@@ -178,7 +178,7 @@ def create_pg_tables(cur):
 
 
 def migrate_table(pg_cur, sqlite_cur, table_name: str, columns: list, pg_columns: list = None):
-    """Migrate a single table from SQLite to PostgreSQL"""
+    """Migrate a single table from SQLite to PostgreSQL using batch insert"""
     if pg_columns is None:
         pg_columns = columns
 
@@ -190,16 +190,24 @@ def migrate_table(pg_cur, sqlite_cur, table_name: str, columns: list, pg_columns
         print(f"  {table_name}: 0 rows (skip)")
         return 0
 
-    # Insert into PostgreSQL
+    # Batch insert into PostgreSQL
     placeholders = ', '.join(['%s'] * len(pg_columns))
     insert_sql = f"INSERT INTO {table_name} ({', '.join(pg_columns)}) VALUES ({placeholders})"
 
-    for row in rows:
-        try:
-            pg_cur.execute(insert_sql, tuple(row))
-        except Exception as e:
-            print(f"  Error inserting into {table_name}: {e}")
-            continue
+    # Convert rows to tuples
+    data = [tuple(row) for row in rows]
+
+    try:
+        pg_cur.executemany(insert_sql, data)
+    except Exception as e:
+        print(f"  Batch insert failed, trying row-by-row: {e}")
+        # Fallback to row-by-row
+        for row in rows:
+            try:
+                pg_cur.execute(insert_sql, tuple(row))
+            except Exception as row_e:
+                print(f"  Error inserting into {table_name}: {row_e}")
+                continue
 
     return len(rows)
 
@@ -244,6 +252,21 @@ def main():
         create_pg_tables(pg_cur)
         pg_conn.commit()
         print("  OK")
+
+        # Pre-migration: Get SQLite record counts for verification
+        print("\n" + "=" * 60)
+        print("Source (SQLite) Record Counts")
+        print("=" * 60)
+        sqlite_counts = {}
+        for table in ['raw_records', 'matched_trades', 'trade_stats', 'stock_pool',
+                      'crypto_trades', 'crypto_config', 'crypto_backtest_runs', 'crypto_backtest_trades']:
+            sqlite_cur.execute(f"SELECT COUNT(*) FROM {table}")
+            cnt = sqlite_cur.fetchone()[0]
+            sqlite_counts[table] = cnt
+            print(f"  {table}: {cnt}")
+        total_sqlite = sum(sqlite_counts.values())
+        print("-" * 40)
+        print(f"  Total: {total_sqlite} records")
 
         # Migration summary
         total_migrated = 0
@@ -341,7 +364,7 @@ def main():
 
         # Verification
         print("\n" + "=" * 60)
-        print("Verification")
+        print("Verification: Source vs Target")
         print("=" * 60)
 
         pg_cur.execute("""
@@ -355,15 +378,27 @@ def main():
             UNION ALL SELECT 'crypto_backtest_trades', COUNT(*) FROM crypto_backtest_trades
         """)
 
-        print("\nPostgreSQL record counts:")
-        print("-" * 40)
+        print("\n{:<30} {:>10} {:>10} {:>10}".format("Table", "SQLite", "PostgreSQL", "Match"))
+        print("-" * 62)
         total_pg = 0
+        all_match = True
         for row in pg_cur.fetchall():
-            print(f"  {row[0]}: {row[1]}")
-            total_pg += row[1]
+            tbl = row[0]
+            pg_cnt = row[1]
+            sqlite_cnt = sqlite_counts.get(tbl, 0)
+            match = "✓" if sqlite_cnt == pg_cnt else "✗"
+            if sqlite_cnt != pg_cnt:
+                all_match = False
+            print(f"  {tbl:<28} {sqlite_cnt:>10} {pg_cnt:>10} {match:>10}")
+            total_pg += pg_cnt
 
-        print("-" * 40)
-        print(f"  Total: {total_pg} records")
+        print("-" * 62)
+        print(f"  {'Total':<28} {total_sqlite:>10} {total_pg:>10}")
+
+        if all_match:
+            print("\n✓ All tables migrated successfully!")
+        else:
+            print("\n✗ WARNING: Some counts don't match!")
 
         print("\n" + "=" * 60)
         print(f"Migration complete! {total_migrated} records migrated.")

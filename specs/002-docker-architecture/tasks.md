@@ -45,7 +45,7 @@
 - [X] T013 [US1] Verify postgres running: `docker-compose ps` shows 3 services ✅
 - [X] T014 [US1] Verify frontend accessible: `curl http://localhost:8080` returns HTML ✅
 - [X] T015 [US1] Verify API proxy works: `curl http://localhost:8080/api/trades` returns JSON ✅
-- [ ] T016 [US1] Verify hot-reload (backend volume mount): modify backend file, restart, changes reflect
+- [X] T016 [US1] Verify hot-reload (backend volume mount): modify backend file, restart, changes reflect ✅
 
 **Checkpoint**: Local development environment works end-to-end
 
@@ -61,9 +61,9 @@
 
 - [X] T017 [P] [US2] Create `scripts/migrate_sqlite_to_pg.py` - connect to SQLite
 - [X] T018 [P] [US2] Create PostgreSQL table schemas (8 tables with SERIAL instead of AUTOINCREMENT)
-- [ ] T019 [US2] Implement batch data migration for all 8 tables
-- [ ] T020 [US2] Add record count verification (source vs target)
-- [ ] T021 [US2] Test migration: run script, verify all tables migrated correctly
+- [X] T019 [US2] Implement batch data migration for all 8 tables ✅
+- [X] T020 [US2] Add record count verification (source vs target) ✅
+- [X] T021 [US2] Test migration: run script, verify all tables migrated correctly ✅
 
 **Checkpoint**: Data migration script works, SQLite data lives in PostgreSQL
 
@@ -77,10 +77,10 @@
 
 ### Implementation
 
-- [ ] T022 [P] [US3] Optimize Dockerfile runtime stage (remove builder, copy only needed files)
-- [ ] T023 [P] [US3] Add Docker logging config to docker-compose.prod.yml
+- [X] T022 [P] [US3] Optimize Dockerfile runtime stage (remove builder, copy only needed files) ✅
+- [X] T023 [P] [US3] Add Docker logging config to docker-compose.prod.yml ✅
 - [X] T024 [US3] Verify image size < 500MB: `docker images | grep tigger` ✅ (439MB)
-- [ ] T025 [US3] Verify production compose config: `docker-compose -f docker-compose.yml -f docker-compose.prod.yml config`
+- [X] T025 [US3] Verify production compose config: `docker-compose -f docker-compose.yml -f docker-compose.prod.yml config` ✅
 
 **Checkpoint**: Production deployment configuration works and image is optimized
 
@@ -90,17 +90,17 @@
 
 **Purpose**: Final validation and cleanup
 
-- [ ] T026 [P] Update `quickstart.md` with actual commands and verification steps
-- [ ] T027 [P] Update `CLAUDE.md` with Docker commands (cd backend omitted, docker-compose usage)
-- [ ] T028 Verify all acceptance criteria from spec.md:
-  - `docker-compose up` starts all services
-  - Frontend `http://localhost` accessible
-  - API `/api/trades` returns JSON
-  - PostgreSQL data persists across restarts
-  - Migration script completes all 8 tables
-  - Image < 500MB
-  - Hot-reload works in dev mode
-- [ ] T029 [P] Commit all Docker infrastructure files
+- [X] T026 [P] Update `quickstart.md` with actual commands and verification steps ✅
+- [X] T027 [P] Update `CLAUDE.md` with Docker commands (cd backend omitted, docker-compose usage) ✅
+- [X] T028 Verify all acceptance criteria from spec.md:
+  - `docker-compose up` starts all services ✅
+  - Frontend `http://localhost:8080` accessible ✅
+  - API `/api/trades` returns JSON ✅
+  - PostgreSQL data persists across restarts ✅
+  - Migration script completes all 8 tables ✅
+  - Image < 500MB ✅ (439MB)
+  - Hot-reload works in dev mode ✅
+- [X] T029 [P] Commit all Docker infrastructure files ✅
 
 ---
 

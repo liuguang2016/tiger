@@ -10,6 +10,27 @@ A comprehensive trading assistant combining delivery order analysis, spring rebo
 
 ## Commands
 
+### Docker Deployment (Recommended)
+
+```bash
+# 1. Copy environment template
+cp .env.example .env
+# Edit .env, set POSTGRES_PASSWORD
+
+# 2. Build frontend
+cd frontend && pnpm install && pnpm run build && cd ..
+
+# 3. Start all services
+docker compose up -d
+
+# 4. Access the application
+# Frontend: http://localhost:8080
+# API: http://localhost:8080/api/*
+# API docs: http://localhost:8080/docs
+```
+
+### Traditional Installation (without Docker)
+
 ```bash
 # Install dependencies
 cd backend
@@ -35,7 +56,8 @@ uvicorn main:app --reload --port 8002
 - **A-Share Data**: 东方财富 API / 腾讯财经 API (via akshare)
 - **Crypto**: Binance REST API (HMAC-SHA256)
 - **Frontend**: ECharts for charts
-- **Database**: SQLite (`data/trades.db`)
+- **Database**: PostgreSQL (Docker container)
+- **Containerization**: Docker + Docker Compose + Nginx
 
 ### Project Structure
 ```
@@ -56,7 +78,7 @@ tigger/
 │   │   ├── matcher.py         # FIFO trade matching & P&L calculation
 │   │   ├── analyzer.py        # Trading style analysis
 │   │   ├── stock_data.py      # A-share K-line data fetching
-│   │   ├── database.py        # SQLite data storage
+│   │   ├── database.py        # PostgreSQL data storage
 │   │   ├── screener.py        # Spring rebound stock screener
 │   │   ├── signal_engine.py   # Trading signal generation
 │   │   ├── binance_client.py  # Binance REST API wrapper
@@ -65,13 +87,19 @@ tigger/
 │   │   └── stock_backtest.py  # Stock strategy backtest engine
 │   └── strategies/            # Trading strategies
 ├── frontend/                   # Vue 3 frontend source
-├── static/                     # Vue build output (served by FastAPI)
-└── data/                       # SQLite database
+├── static/                     # Vue build output (served by Nginx)
+├── docker/                     # Docker configuration
+│   └── nginx/nginx.conf       # Nginx reverse proxy config
+├── docker-compose.yml          # Docker Compose (dev)
+├── docker-compose.prod.yml     # Docker Compose (prod)
+├── Dockerfile                  # Backend Docker image
+└── scripts/
+    └── migrate_sqlite_to_pg.py # SQLite to PostgreSQL migration
 ```
 
 ### Core Modules
 
-**services/database.py** - SQLite abstraction layer with tables for:
+**services/database.py** - PostgreSQL abstraction layer with tables for:
 - `raw_records` - Parsed CSV records
 - `matched_trades` - FIFO-paired trades with P&L
 - `stats` - Trading statistics
@@ -98,7 +126,9 @@ tigger/
 
 ## Active Technologies
 - Python 3.14 + FastAPI 0.115+, uvicorn[standard], python-multipart (001-fastapi-migration)
-- SQLite (`data/trades.db`) - unchanged (001-fastapi-migration)
+- PostgreSQL (via Docker) - migrated from SQLite (002-docker-architecture)
+- Docker + Docker Compose + Nginx (002-docker-architecture)
 
 ## Recent Changes
 - 001-fastapi-migration: Added Python 3.14 + FastAPI 0.115+, uvicorn[standard], python-multipart
+- 002-docker-architecture: Docker deployment with PostgreSQL, Nginx reverse proxy
