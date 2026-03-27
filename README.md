@@ -1,6 +1,6 @@
 # Tigger - A 股 & 数字货币交易分析系统
 
-集交割单分析、弹簧反弹选股、数字货币量化交易于一体的交易辅助工具。基于价格行为学理论，覆盖 A 股筛选和加密货币全自动交易。
+集交割单分析、弹簧反弹选股，数字货币量化交易于一体的交易辅助工具。基于价格行为学理论，覆盖 A 股筛选和加密货币全自动交易。
 
 ## 功能特性
 
@@ -17,7 +17,7 @@
 
 基于价格行为学理论，筛选大幅下跌后"跌不下去"且成交量异变的股票：
 
-- **全 A 股扫描**：一键筛选 5000+ 只 A 股（自动排除 ST、停牌、新股）
+- **全 A 股扫描**：一键筛选 5000+ 只 A 股（自动排除 ST、停牌，新股）
 - **多维度过滤**：
   - 跌幅达标 — 当前价距 60 日高点回撤 ≥ 阈值（默认 25%）
   - 企稳信号 — 多维度确认（不创新低 + 下跌减速 + 振幅收窄 + 底部放量）
@@ -26,7 +26,7 @@
   - K 线形态 — 锤子线 / 阳包阴 / 早晨之星
 - **大盘环境评估**：结合上证指数趋势判断信号有效性
 - **综合评分模型**：跌幅深度(25%) + 企稳质量(20%) + 量能异变(20%) + 均线位置(15%) + K 线形态(10%) + 大盘环境(10%)
-- **可调参数**：跌幅阈值、量比阈值、市值范围、换手率、均线条件
+- **可调参数**：跌幅阈值、量比阈值，市值范围、换手率、均线条件
 - **交易池管理**：筛选结果持久化，支持逐只移除或清空
 - **K 线图查看**：点击交易池中的股票查看近期走势
 
@@ -45,7 +45,7 @@
   - 阶梯止盈（+8% 止盈50%，+15% 止盈全部）
   - 固定止损（默认 -5%）
   - 单币种最大仓位限制 + 最大持仓数
-- **实时仪表盘**：余额、持仓、浮动盈亏、历史胜率、累计盈亏
+- **实时仪表盘**：余额、持仓、浮动盈亏，历史胜率、累计盈亏
 - **信号/持仓/交易记录**三列表切换查看
 - **K 线图表**：ECharts 渲染，含 MA7/MA25/MA99 均线和成交量
 
@@ -62,12 +62,82 @@
   - 最大回撤、最大连续亏损
   - 夏普比率
 - **资金曲线图表**：ECharts 可视化资金变动
-- **逐笔交易明细**：入场/出场时间、价格、盈亏、出场原因
+- **逐笔交易明细**：入场/出场时间、价格、盈亏，出场原因
 - **异步执行**：后台线程 + 进度轮询
 
-## 安装与运行
+## 快速开始 (Docker)
 
-**环境要求**：Python 3.9 或以上（akshare 依赖的 aiohttp 3.11.x 不支持 Python 3.8）。
+### 环境要求
+
+- Docker Engine 20.10+
+- Docker Compose 2.0+
+- Node.js 20+ (仅前端构建)
+
+### 启动服务
+
+```bash
+# 1. 复制环境变量模板
+cp .env.example .env
+# 编辑 .env，设置 POSTGRES_PASSWORD
+
+# 2. 构建前端
+cd frontend
+pnpm install
+pnpm run build
+cd ..
+
+# 3. 启动全部服务
+docker compose up -d
+
+# 4. 访问
+# 前端: http://localhost:8080
+# API:  http://localhost:8080/api/*
+# API 文档: http://localhost:8080/docs
+```
+
+### 常用命令
+
+```bash
+# 查看服务状态
+docker compose ps
+
+# 查看日志
+docker compose logs -f [service]
+
+# 进入后端容器
+docker compose exec backend bash
+
+# 进入 PostgreSQL
+docker compose exec postgres psql -U tigger -d tigger
+
+# 停止服务
+docker compose down
+
+# 重建镜像
+docker compose build --no-cache
+```
+
+## 数据迁移 (从 SQLite)
+
+如果需要将原有 SQLite 数据迁移到 PostgreSQL：
+
+```bash
+# 1. 确保 SQLite 数据存在
+ls data/trades.db
+
+# 2. 启动 PostgreSQL
+docker compose up -d postgres
+
+# 3. 运行迁移脚本
+python scripts/migrate_sqlite_to_pg.py
+
+# 4. 验证
+docker compose exec postgres psql -U tigger -d tigger -c "SELECT COUNT(*) FROM matched_trades"
+```
+
+## 传统安装方式 (不使用 Docker)
+
+**环境要求**：Python 3.14+（akshare 依赖的 aiohttp 3.11.x 不支持 Python 3.8）。
 
 ```bash
 # 1. 创建并激活虚拟环境
@@ -123,37 +193,41 @@ uvicorn main:app --reload --port 8002
 tigger/
 ├── backend/                     # 后端代码
 │   ├── main.py                 # FastAPI 主应用入口
-│   ├── app.py                  # Flask 主应用（迁移后保留对比）
 │   ├── api/                    # API 路由模块
-│   │   ├── response.py        # 响应格式化工具
 │   │   └── routes/
 │   │       ├── trades.py      # 交割单分析路由
 │   │       ├── screener.py    # 选股路由
 │   │       ├── crypto.py      # 数字货币路由
 │   │       └── backtest.py    # 回测路由
 │   ├── requirements.txt        # Python 依赖
-│   ├── services/               # 业务逻辑
-│   │   ├── parser.py          # 交割单 CSV 解析
-│   │   ├── matcher.py         # 买卖配对与盈亏计算
-│   │   ├── analyzer.py         # 交易风格分析
-│   │   ├── stock_data.py      # A 股 K 线数据获取
-│   │   ├── database.py         # SQLite 数据存储
-│   │   ├── screener.py         # 弹簧反弹选股引擎
-│   │   ├── binance_client.py   # Binance REST API 封装
-│   │   ├── crypto_trader.py     # 数字货币交易机器人
-│   │   └── crypto_backtest.py   # 策略历史回测引擎
-│   └── strategies/             # 交易策略
+│   └── services/               # 业务逻辑
+│       ├── database.py         # PostgreSQL 数据存储
+│       ├── parser.py          # 交割单 CSV 解析
+│       ├── matcher.py         # 买卖配对与盈亏计算
+│       ├── analyzer.py         # 交易风格分析
+│       ├── stock_data.py      # A 股 K 线数据获取
+│       ├── screener.py        # 弹簧反弹选股引擎
+│       ├── binance_client.py  # Binance REST API 封装
+│       ├── crypto_trader.py    # 数字货币交易机器人
+│       └── crypto_backtest.py  # 策略历史回测引擎
 ├── frontend/                   # Vue 3 前端源码
-├── static/                     # Vue 构建输出 (由 FastAPI 服务)
-├── data/                       # SQLite 数据库
-└── venv/                      # Python 虚拟环境
+├── static/                     # Vue 构建输出 (由 Nginx 服务)
+├── docker/                     # Docker 配置
+│   └── nginx/nginx.conf       # Nginx 配置
+├── scripts/                    # 工具脚本
+│   └── migrate_sqlite_to_pg.py # SQLite → PostgreSQL 迁移
+├── docker-compose.yml          # Docker Compose 配置
+├── docker-compose.prod.yml     # 生产环境配置
+├── Dockerfile                  # 后端镜像构建
+└── .env.example                # 环境变量模板
 ```
 
 ## 技术栈
 
-- 后端：Python + FastAPI
+- 后端：Python + FastAPI + PostgreSQL
+- 容器化：Docker + Docker Compose + Nginx
 - 数据处理：pandas、numpy
 - A 股行情：东方财富 API / 腾讯财经 API
 - 加密货币：Binance REST API（HMAC-SHA256 签名认证）
 - 前端图表：ECharts
-- 数据存储：SQLite
+- 数据存储：PostgreSQL (Docker)
